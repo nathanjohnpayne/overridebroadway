@@ -12,21 +12,25 @@ Override is a Broadway production finance platform with three primary surfaces:
 
 ## 2) Tech Stack
 
-- Framework: Next.js App Router (`next@16`) with static export
-- Language: TypeScript (strict)
-- UI: Tailwind v4 + shadcn/ui + Radix primitives
-- State: React Hook Form + Zustand (UI-only persistence)
-- Backend: Firebase Auth, Firestore, Storage, Analytics
+- Framework: Next.js 16.1.6 App Router with static export (`output: "export"`)
+- Language: TypeScript 5 (strict)
+- UI: Tailwind CSS v4 + shadcn/ui + Radix primitives + Lucide icons
+- Charts: Recharts 3
+- Forms: react-hook-form (Controller + watch pattern; zod installed but unused for validation)
+- State: Zustand with persist middleware (UI state only)
+- Toasts: Sonner
+- Backend: Firebase 12 — Auth, Firestore, Storage, Analytics
 - Hosting: Firebase Hosting serving `out/`
 
 Key files:
 
-- `next.config.ts`
-- `src/lib/firebase.ts`
-- `src/lib/firestore.ts`
-- `firebase.json`
-- `firestore.rules`
-- `storage.rules`
+- `next.config.ts` — static export, build ID injection, image unoptimization
+- `src/lib/firebase.ts` — singleton Firebase init with browser guard
+- `src/lib/firestore.ts` — all Firestore CRUD + `stripUndefined()` helper
+- `src/lib/storage.ts` — artwork + PDF upload helpers
+- `firebase.json` — hosting config, cache headers, SPA rewrite
+- `firestore.rules` — owner-only production access, public deal rooms
+- `storage.rules` — owner-only file access
 
 ## 3) Runtime and Routing Model
 
@@ -42,17 +46,21 @@ To keep browser-only dependencies safe with static export:
 
 ## 4) Route Structure
 
-- `src/app/page.tsx`: marketing landing page
-- `src/app/(auth)/login/page.tsx`: sign-in
-- `src/app/(auth)/signup/page.tsx`: sign-up
-- `src/app/(app)/dashboard/page.tsx`: productions + investments list
-- `src/app/(app)/productions/view/page.tsx`: wrapper for production workspace
-- `src/app/deal-room/page.tsx`: wrapper for public deal room
+| Route | Auth | Component |
+|-------|------|-----------|
+| `/` | No | `src/app/page.tsx` — marketing landing page |
+| `/login` | No | `src/app/(auth)/login/page.tsx` — email + Google sign-in |
+| `/signup` | No | `src/app/(auth)/signup/page.tsx` — registration |
+| `/dashboard` | Yes | `src/app/(app)/dashboard/page.tsx` — productions grid (`?view=investments` for investor view) |
+| `/productions/view?id=<uuid>` | Yes | `src/app/(app)/productions/view/page.tsx` → `ProductionDynamicLoader` → `ProductionHubClient` |
+| `/productions/new` | Yes | `src/app/(app)/productions/new/page.tsx` — redirect stub → `/dashboard` |
+| `/deal-room?token=<uuid>` | No | `src/app/deal-room/page.tsx` → `DealRoomDynamicLoader` → `DealRoomClient` → `DealRoomView` |
 
 Auth boundary:
 
-- `(app)` routes require auth via `src/app/(app)/layout.tsx`
+- `(app)` routes require auth via `src/app/(app)/layout.tsx` (redirects to `/login`, shows skeleton while restoring session)
 - `/deal-room` intentionally sits outside `(app)` and is public-by-token
+- The app layout nav bar has "Productions" and "My Investments" buttons for view mode toggling
 
 ## 5) Data Model (Firestore)
 
@@ -77,17 +85,25 @@ Important behavioral rules:
 
 ## 6) Storage Layout
 
-Production-level files:
+Production-level files at `productions/{userId}/{productionId}/`:
 
-- `productions/{userId}/{productionId}/artwork`
-- `productions/{userId}/{productionId}/agreement.pdf`
-- `productions/{userId}/{productionId}/{docType}.pdf`
+- `artwork` — production artwork image (max 5MB)
+- `operating-agreement.pdf` — operating agreement (max 20MB)
+- `instruction-letter.pdf` — investor instruction letter
+- `member-signature-page.pdf` — member signature page
+- `subscription-agreement.pdf` — subscription agreement
 
-Investor files:
+Investor files at `productions/{userId}/{productionId}/investors/{investorId}/`:
 
-- `productions/{userId}/{productionId}/investors/{investorId}/{docType}.pdf`
+- `distributed/instruction-letter.pdf`
+- `distributed/signature-page.pdf`
+- `distributed/subscription-agreement.pdf`
+- `signed/signature-page.pdf`
+- `signed/subscription-agreement.pdf`
+- `executed/signature-page.pdf`
+- `executed/subscription-agreement.pdf`
 
-Storage access is owner-restricted by `userId` in path + auth UID match.
+Storage access is owner-restricted: auth UID must match the `userId` path segment.
 
 ## 7) Core UI Architecture
 
@@ -138,6 +154,7 @@ Scenario engine:
 
 - `runScenario(deal, scenario)` generates full `ModelOutput`
 - `generateSensitivityGrid(...)` precomputes ROI/multiple cells for UI
+- `DEFAULT_SCENARIOS`: Bear (60% occ, $100 ATP, 20 weeks), Base (75% occ, $115 ATP, 36 weeks), Bull (90% occ, $135 ATP, 52 weeks)
 
 ## 9) Investor Bridge Pattern
 
@@ -188,26 +205,42 @@ Storage:
 
 - Read/write allowed only when auth UID matches path `userId`
 
-## 13) Build and Deploy Notes
+## 13) Build, Deploy, and Observability
 
-- `prebuild.mjs` writes `.build_id`
-- `next.config.ts` injects `NEXT_PUBLIC_BUILD_ID`
-- `postbuild.mjs` writes `out/_build_id.txt`
-- `UpdateChecker` polls `_build_id.txt` in production and prompts refresh
+### Build Pipeline
+
+1. `npm run prebuild` → `scripts/prebuild.mjs` writes a timestamp to `.build_id`
+2. `npm run build` → Next.js static export; `next.config.ts` reads `.build_id` and injects as `NEXT_PUBLIC_BUILD_ID`
+3. `npm run postbuild` → `scripts/postbuild.mjs` copies `.build_id` to `out/_build_id.txt`
+
+### Deployment
+
+```bash
+firebase deploy                    # Full deploy (hosting + Firestore rules + Storage rules)
+firebase deploy --only hosting     # Hosting only
+```
+
+Firebase Hosting serves from `out/` with:
+- 1-year immutable cache for `/_next/static/**`
+- No-cache for HTML files
+- No-store for `/_build_id.txt`
+- SPA catch-all rewrite: all routes → `/index.html`
+
+### Live Update Detection
+
+`UpdateChecker` component polls `/_build_id.txt` in production and displays a toast (via Sonner) prompting the user to refresh when a new deployment is detected.
+
+### Analytics
+
+Firebase Analytics is initialized in `AnalyticsInit` component (browser-only). Typed event helpers in `src/lib/analytics.ts` track user actions across auth, deal building, investor management, and deal room flows. All events are fire-and-forget.
 
 ## 14) Current Risks / Mismatches To Be Aware Of
 
-1. Waterfall toggle semantics are partly inconsistent:
+1. **Waterfall toggle inconsistency** — `calculateWeeklyResult` in `calculations.ts` gates the effective investor split using `hasProfitSharing` (when false, `effectiveInvestorSplit` is forced to 0%). However, `deriveWaterfallPhaseState` in `waterfallPhase.ts` derives phase state from `postRecoupInvestorSplit < 1.0` regardless of the toggle. This means the waterfall phase badge can display "Profit Sharing" while the actual financial calculations give investors 0% post-recoup if `hasProfitSharing` is false.
 
-- `calculateWeeklyResult` currently gates effective investor split with `hasProfitSharing`
-- `waterfallPhase` derives state from `postRecoupInvestorSplit` regardless of toggle
+2. **Production deletion does not cascade** — `deleteProduction()` in `firestore.ts` only deletes the root production document. Subcollections (`dealInputs/primary`, `investors/*`, `producerPools/*`, `scenarios/*`) and associated Storage files are not cleaned up, resulting in orphaned data.
 
-2. Production deletion behavior may not match UI warning:
-
-- `deleteProduction` currently deletes only the root production document
-- subcollections/files are not explicitly cascade-deleted in app code
-
-3. Lint currently reports errors/warnings in this repository state (including React hook rule errors and unused imports/vars).
+3. **Unused dependencies** — `zod`, `date-fns`, `@hookform/resolvers`, and `next-themes` are installed but have no direct imports in application code (some may be transitive requirements of shadcn/ui components).
 
 ## 15) Where To Edit For Common Changes
 

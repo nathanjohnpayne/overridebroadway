@@ -1,36 +1,114 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Override
+
+Override is the financial operating platform for Broadway producers — from modeling your capitalization to managing investors, tracking recoupment, and distributing returns.
+
+**Live at**: [overridebroadway.com](https://overridebroadway.com)
+
+## Features
+
+- **Deal Builder** — Guided or direct-edit workflow for structuring Broadway production deals (capitalization, weekly economics, revenue, royalties, waterfall)
+- **Financial Model** — Real-time per-week P&L projections with breakeven analysis, IRR calculation, and investor return modeling
+- **Scenario Analysis** — Bear/Base/Bull scenario comparison with an occupancy × run-length sensitivity grid
+- **Capitalization Management** — Full investor cap table with status tracking, document management, and producer pool organization
+- **Deal Room** — Public, token-secured investor workspace with snapshotted deal economics (no login required)
+- **Waterfall Engine** — Configurable recoup-first or share-from-dollar-one distribution structures with GP fee layering
+
+## Tech Stack
+
+| Layer | Technology |
+|-------|-----------|
+| Framework | Next.js 16 (App Router, static export) |
+| Language | TypeScript (strict) |
+| UI | Tailwind CSS v4 + shadcn/ui + Lucide |
+| Charts | Recharts 3 |
+| Forms | react-hook-form |
+| State | Zustand (persist middleware) |
+| Backend | Firebase (Auth, Firestore, Storage, Analytics) |
+| Hosting | Firebase Hosting |
 
 ## Getting Started
 
-First, run the development server:
+### Prerequisites
+
+- Node.js 20+
+- npm
+- Firebase CLI (`npm install -g firebase-tools`)
+
+### Setup
+
+1. Clone the repository:
+
+```bash
+git clone https://github.com/your-org/overridebroadway.git
+cd overridebroadway
+```
+
+2. Install dependencies:
+
+```bash
+npm install
+```
+
+3. Create `.env.local` with your Firebase config:
+
+```
+NEXT_PUBLIC_FIREBASE_API_KEY=
+NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=soyouthinkyouwant.firebaseapp.com
+NEXT_PUBLIC_FIREBASE_PROJECT_ID=soyouthinkyouwant
+NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET=soyouthinkyouwant.firebasestorage.app
+NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=777571271688
+NEXT_PUBLIC_FIREBASE_APP_ID=
+NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID=
+```
+
+Get these values from: Firebase Console → Project Settings → Your Apps → Web App config.
+
+4. Start the development server:
 
 ```bash
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open [http://localhost:3000](http://localhost:3000).
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Scripts
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+| Command | Description |
+|---------|-------------|
+| `npm run dev` | Start development server |
+| `npm run build` | Static export to `out/` (includes prebuild/postbuild scripts) |
+| `npm run lint` | Run ESLint |
+| `firebase deploy` | Deploy hosting + Firestore rules + Storage rules |
+| `firebase deploy --only hosting` | Deploy hosting only |
 
-## Learn More
+## Project Structure
 
-To learn more about Next.js, take a look at the following resources:
+```
+src/
+├── app/                    # Next.js App Router pages and components
+│   ├── (auth)/             # Login and signup (public)
+│   ├── (app)/              # Authenticated routes (dashboard, production hub)
+│   └── deal-room/          # Public investor-facing deal room
+├── components/             # Shared components (analytics, update checker, shadcn/ui)
+├── contexts/               # React context providers (auth)
+├── hooks/                  # Custom hooks (productions, deal inputs, investors, pools)
+├── lib/                    # Firebase integration, Firestore CRUD, storage, utilities
+│   └── model/              # Financial engine (calculations, scenarios, waterfall, formatters)
+├── stores/                 # Zustand stores (UI state)
+└── types/                  # TypeScript type definitions
+```
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Documentation
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+- **[CLAUDE.md](./CLAUDE.md)** — Comprehensive project documentation covering architecture, financial model, data model, types, industry benchmarks, and development guidelines
+- **[ARCHITECTURE.md](./ARCHITECTURE.md)** — Onboarding guide with system overview, routing model, and common change patterns
 
-## Deploy on Vercel
+## Firebase Project
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+- **Project ID**: soyouthinkyouwant
+- **Auth providers**: Email/Password, Google
+- **Custom domain**: overridebroadway.com
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## License
+
+Private — All rights reserved.

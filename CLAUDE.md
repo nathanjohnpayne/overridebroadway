@@ -4,13 +4,14 @@ Override is the financial operating platform for Broadway producers — from mod
 
 ## Tech Stack
 
-- **Framework**: Next.js 16 (App Router, `output: 'export'` for Firebase Hosting)
-- **Language**: TypeScript (strict)
-- **UI**: Tailwind CSS + shadcn/ui
-- **Charts**: Recharts
-- **Forms**: react-hook-form (no zod — forms are unvalidated, values managed via Controller + watch)
+- **Framework**: Next.js 16.1.6 (App Router, `output: 'export'` for Firebase Hosting)
+- **Language**: TypeScript 5 (strict)
+- **UI**: Tailwind CSS v4 + shadcn/ui (Radix primitives) + Lucide icons
+- **Charts**: Recharts 3
+- **Forms**: react-hook-form (values managed via Controller + watch; zod is installed but not used for form validation)
 - **State**: Zustand with persist middleware (guided mode UI state across page refreshes)
-- **Backend**: Firebase — Auth, Firestore, Storage, Analytics
+- **Toasts**: Sonner (used for success/error feedback across auth, save, upload, and deal room flows)
+- **Backend**: Firebase 12 — Auth, Firestore, Storage, Analytics
 - **Hosting**: Firebase Hosting (static export)
 - **Domain**: overridebroadway.com (custom domain via Firebase Hosting)
 
@@ -19,10 +20,13 @@ Override is the financial operating platform for Broadway producers — from mod
 ```
 src/
 ├── app/
+│   ├── layout.tsx             # Root layout: Geist font, AuthProvider, TooltipProvider, Toaster, SEO meta
+│   ├── globals.css            # Tailwind v4 imports + CSS custom properties (theme tokens, dark mode)
 │   ├── (auth)/login/          # Email + Google sign-in
-│   ├── (auth)/signup/         # Registration
+│   ├── (auth)/signup/         # Registration (display name, email, password, Google OAuth)
 │   ├── (app)/layout.tsx       # App shell: sticky nav, auth guard, skeleton
-│   ├── (app)/dashboard/       # Portfolio grid
+│   ├── (app)/dashboard/       # Portfolio grid (?view=investments for My Investments mode)
+│   ├── (app)/productions/new/ # Legacy redirect stub → /dashboard
 │   ├── (app)/productions/view/ # Production hub — uses ?id= query param
 │   │   ├── page.tsx                    # Server wrapper: generateStaticParams
 │   │   ├── ProductionDynamicLoader.tsx  # Client: next/dynamic ssr:false
@@ -53,7 +57,12 @@ src/
 │   └── page.tsx               # Marketing landing page
 ├── components/
 │   ├── AnalyticsInit.tsx      # Fires Firebase Analytics on mount
-│   └── UpdateChecker.tsx      # Build-ID polling for live update detection
+│   ├── UpdateChecker.tsx      # Build-ID polling for live update detection
+│   └── ui/                    # shadcn/ui primitives (20 components)
+│       ├── button, card, dialog, dropdown-menu, input, label
+│       ├── select, sheet, skeleton, separator, switch, table
+│       ├── tabs, textarea, tooltip, popover, progress, badge
+│       ├── form, sonner                                     
 ├── contexts/
 │   └── AuthContext.tsx        # Auth state, signIn/signUp/signOut
 ├── hooks/
@@ -120,6 +129,10 @@ Security rules:
 - Productions and subcollections: `request.auth.uid == resource.data.userId`
 - Deal rooms: public read when `isActive == true`; writes require ownership
 
+Composite indexes (`firestore.indexes.json`):
+- `productions`: userId ASC + updatedAt DESC; userId ASC + createdAt DESC; userId ASC + status ASC + createdAt DESC
+- `scenarios`: productionId ASC + createdAt DESC
+
 ### Firestore `undefined` Safety
 Firestore rejects documents containing `undefined` values. All saves go through `stripUndefined<T>()` in `firestore.ts`, which recursively removes `undefined` fields while preserving Firestore sentinel values (detected via `_methodName` duck-typing).
 
@@ -156,6 +169,54 @@ interface DealBuilderUIStore {
 ```
 
 The old `"broadway-deal-draft"` localStorage key is obsolete and can be cleared — the new key is `"deal-builder-ui"`.
+
+---
+
+## Dashboard
+
+`/dashboard` — the authenticated home screen with two view modes controlled by query param.
+
+### View Modes
+
+- **My Productions** (default): Grid of production cards the user owns. Each card shows artwork banner (blurred background effect), title, subtitle, venue, status badge, and timestamps.
+- **My Investments** (`?view=investments`): Placeholder view for productions where the user is an investor (feature stub).
+
+The nav bar in `(app)/layout.tsx` has two persistent buttons — "Productions" and "My Investments" — that toggle between these views. The active view is highlighted with a `secondary` variant button.
+
+### Production CRUD
+
+- **Create**: Dialog with name, status, optional subtitle/venue. Creates Firestore document and navigates to production hub.
+- **Delete**: Confirmation dialog. Currently deletes only the root production document — subcollections (dealInputs, investors, producerPools, scenarios) and Storage files are **not** cascade-deleted in app code.
+
+### Production Type (production.ts)
+
+```typescript
+interface Production {
+  id: string;
+  userId: string;
+  name: string;
+  subtitle?: string;
+  venue?: string;
+  status: ProductionStatus;         // "development" | "preview" | "open" | "closed"
+  showUrl?: string;
+  artworkUrl?: string;
+  // Production-level document URLs
+  investorInstructionLetterUrl?: string;
+  investorInstructionLetterName?: string;
+  memberSignaturePageUrl?: string;
+  memberSignaturePageName?: string;
+  subscriptionAgreementUrl?: string;
+  subscriptionAgreementName?: string;
+  operatingAgreementUrl?: string;
+  operatingAgreementName?: string;
+  // Flags
+  hasPersonalInvestment?: boolean;  // true when any investor has isPersonalInvestment=true
+  dealRoomEnabled?: boolean;        // true when a deal room is active
+  dealRoomToken?: string;           // deal room document ID / share token
+  createdAt: Date;
+  updatedAt: Date;
+}
+```
 
 ---
 
@@ -280,10 +341,10 @@ Shows skeleton placeholders when `modelOutput` is null.
 
 ### Investor View (DealRoomView.tsx)
 
-Runs `runScenario()` client-side against snapshotted `dealInputs`. Three built-in scenarios:
-- **Bear**: 60% occupancy, 20-week run
-- **Base**: 75% occupancy, 36-week run
-- **Bull**: 90% occupancy, 52-week run
+Runs `runScenario()` client-side against snapshotted `dealInputs`. Three built-in scenarios (from `DEFAULT_SCENARIOS` in `scenarios.ts`):
+- **Bear**: 60% occupancy, $100 ATP, 20-week run
+- **Base**: 75% occupancy, $115 ATP, 36-week run
+- **Bull**: 90% occupancy, $135 ATP, 52-week run
 
 Sections rendered based on `config` toggles: production header, producer note, deal structure cards, scenario cards, WaterfallFlow (reused component), weekly breakdown table, capitalization progress bar, documents, legal disclaimer.
 
@@ -533,7 +594,7 @@ weeklyOfficeCharge: number // kept for Firestore compat, NOT used in calculation
 
 // Waterfall
 waterfallType: "recoup_first" | "share_from_dollar_one"
-hasProfitSharing: boolean  // UI toggle only — does NOT gate financial phase derivation
+hasProfitSharing: boolean  // Gates effective investor split in calculateWeeklyResult (see note below)
 postRecoupInvestorSplit: number  // investor pool % (LP + GP carve) of distributable profit
 runningRoyaltyOffset: boolean
 royaltyOffsetAmount?: number
@@ -543,6 +604,30 @@ estimatedWeeks: number
 previewWeeks: number
 openingWeek: number
 ```
+
+### Default Deal Inputs
+
+`DEFAULT_DEAL_INPUTS` provides industry-calibrated starting values for new productions:
+
+| Field | Default | Notes |
+|-------|---------|-------|
+| totalCapitalization | $2,000,000 | Small musical scale |
+| unitPrice | $20,000 | 100 units |
+| weeklyNut | $450,000 | Mid-range operating costs |
+| capacity | 1,200 seats | |
+| performances | 8/week | Standard Broadway schedule |
+| avgTicketPrice | $125 | Full-price blended |
+| discountRate | 20% | |
+| discountedTicketPrice | $75 | |
+| creditCardFeeRate | 3% | Industry standard |
+| housePercentage | 6% | Industry standard |
+| royalties (total) | ~16.25% | Fixed % of adjusted gross |
+| gpShareOfInvestorPool | 10% | Standard GP carve |
+| waterfallType | recoup_first | Standard structure |
+| postRecoupInvestorSplit | 50% | Standard LP/GP split |
+| estimatedWeeks | 52 | 1-year run |
+| previewWeeks | 4 | |
+| openingWeek | 5 | |
 
 ### ModelOutput (model.ts)
 
@@ -566,7 +651,54 @@ interface ModelOutput {
 
 Two separate investor types exist:
 - `Investor` (deal.ts) — simplified `{ id, name, amount, units }` used in the financial model for IRR calculations. **Never stored directly in Firestore** — always bridged at compute time from `CapitalizationInvestor`.
-- `CapitalizationInvestor` (capitalization.ts) — full investor record with status, docs, pool assignment, email; stored in `investors/{investorId}` subcollection; drives the Capitalization tab UI and is the source of truth for investor data.
+- `CapitalizationInvestor` (capitalization.ts) — full investor record stored in `investors/{investorId}` subcollection; drives the Capitalization tab UI and is the source of truth for investor data.
+
+```typescript
+interface CapitalizationInvestor {
+  id: string;
+  productionId: string;
+  producerPoolId?: string;          // pool assignment
+  // Identity
+  name: string;
+  email: string;
+  phone?: string;
+  address?: string;
+  // Investment
+  shares: number;
+  amountCommitted: number;
+  amountFunded: number;
+  ownershipPercent: number;         // computed as amountCommitted / totalCapitalization before save
+  status: InvestorStatus;           // "invited" | "docs_sent" | "signed" | "funded" | "admitted"
+  notes?: string;
+  isPersonalInvestment?: boolean;   // flags the user's own investment in the cap table
+  // Per-investor document URLs (7 slots across 3 lifecycle stages)
+  distributedInstructionLetterUrl?: string;
+  distributedSignaturePageUrl?: string;
+  distributedSubscriptionAgreementUrl?: string;
+  signedSignaturePageUrl?: string;
+  signedSubscriptionAgreementUrl?: string;
+  executedSignaturePageUrl?: string;
+  executedSubscriptionAgreementUrl?: string;
+  createdAt: Date;
+  updatedAt: Date;
+}
+```
+
+### ProducerPool (capitalization.ts)
+
+```typescript
+interface ProducerPool {
+  id: string;
+  productionId: string;
+  ownerUserId: string;
+  name: string;
+  allocationLimit?: number;         // optional cap on total committed to this pool
+  createdAt: Date;
+  updatedAt: Date;
+}
+```
+
+A "Direct Investors" default pool is lazily created by `ensureDefaultPool()` in `firestore.ts` when none exists. Legacy investors without a `producerPoolId` are assigned to this pool via `assignInvestorsToDefaultPool()`.
 
 ---
 
@@ -626,10 +758,10 @@ Some theaters add a flat weekly rent ($10–20K) already included in the nut, pl
 **Running Royalty Offset**: A fixed weekly dollar amount (industry range: $15K–$50K/week) subtracted from the gross royalty obligation during recoupment. It reduces cash paid to royalty participants pre-recoup, increasing weekly profit available to accelerate recoupment. It has **no effect post-recoupment** — it does not reduce creative participation percentages.
 
 ### GP Compensation Structure
-Three compensation channels apply in sequence every profitable week, before the waterfall split:
-1. **GP Management Fee** (`gpFeeRate`) — % of operating profit
-2. **GP Flat Weekly** (`gpFlatWeekly`) — optional fixed $ per week
-3. **GP Flat Profit %** (`gpFlatProfitPercent`) — optional % of remaining profit
+Four compensation channels, the first three applied in sequence every profitable week before the waterfall split, the fourth applied post-recoup:
+1. **GP Management Fee** (`gpFeeRate`) — % of operating profit (before flat overrides)
+2. **GP Flat Weekly** (`gpFlatWeekly`) — optional fixed $ per week (capped at remaining profit)
+3. **GP Flat Profit %** (`gpFlatProfitPercent`) — optional % of remaining profit after flat weekly
 4. **GP Post-Recoup Carve** (`gpShareOfInvestorPool`) — % of investor pool, applied post-recoup only
 
 Multiple channels can be active simultaneously. The UI warns when more than one is active.
@@ -670,17 +802,76 @@ Public data: Hadestown reported ~$1M average weekly gross, recouped in ~7 months
 
 ---
 
+## Analytics Events
+
+`src/lib/analytics.ts` provides typed analytics helpers via the `Analytics` object. All events are fire-and-forget (errors swallowed).
+
+| Event | Parameters | Trigger |
+|-------|-----------|---------|
+| `pageView` | pageName | Page mount |
+| `signUp` | method (email/google) | Registration |
+| `login` | method (email/google) | Sign-in |
+| `productionCreated` | — | New production dialog |
+| `dealInputsSaved` | productionId | Deal save (manual or autosave) |
+| `scenarioRun` | scenarioName | Scenario execution |
+| `sensitivityGridViewed` | — | Scenarios tab loaded |
+| `artworkUploaded` | — | Artwork upload complete |
+| `agreementUploaded` | — | Operating agreement upload |
+| `modelViewed` | recoupWeek | Financial Model tab opened |
+| `investorAdded` | — | Investor created |
+| `investorDocUploaded` | docType | Investor document uploaded |
+| `capitalizationViewed` | productionId | Capitalization tab opened |
+| `producerPoolCreated` | — | Pool created |
+| `dealRoomCreated` | productionId | Deal room created |
+| `dealRoomViewed` | token | Investor visits deal room |
+| `dealRoomLinkCopied` | productionId | Share link copied |
+| `dealRoomDeactivated` | productionId | Deal room deactivated |
+| `dealRoomUpdated` | productionId | Snapshot updated |
+
+---
+
+## Storage Layout
+
+Production-level files stored at `productions/{userId}/{productionId}/`:
+- `artwork` — Production artwork image (max 5MB, images only)
+- `operating-agreement.pdf` — Operating agreement (max 20MB)
+- `instruction-letter.pdf` — Investor instruction letter
+- `member-signature-page.pdf` — Member signature page
+- `subscription-agreement.pdf` — Subscription agreement
+
+Investor-level files at `productions/{userId}/{productionId}/investors/{investorId}/`:
+- `distributed/instruction-letter.pdf`
+- `distributed/signature-page.pdf`
+- `distributed/subscription-agreement.pdf`
+- `signed/signature-page.pdf`
+- `signed/subscription-agreement.pdf`
+- `executed/signature-page.pdf`
+- `executed/subscription-agreement.pdf`
+
+All uploads use `uploadBytesResumable` with optional progress callbacks. Storage rules enforce that auth UID matches the `userId` path segment.
+
+---
+
 ## Commands
 
 ```bash
-npm run dev      # Local development (Turbopack)
-npm run build    # Static export → out/
-npm run lint     # ESLint
-firebase deploy  # Deploy hosting + rules
+npm run dev      # Local development server (http://localhost:3000)
+npm run build    # Static export → out/ (runs prebuild + postbuild scripts)
+npm run lint     # ESLint (flat config)
+firebase deploy  # Deploy hosting + rules + storage
 firebase deploy --only hosting        # Hosting only
 firebase deploy --only firestore:rules
 firebase deploy --only storage
 ```
+
+### Build Pipeline
+
+The build process has three stages:
+1. **prebuild** (`scripts/prebuild.mjs`): Generates a timestamp-based build ID, writes to `.build_id`
+2. **build**: Next.js static export; `next.config.ts` injects `.build_id` as `NEXT_PUBLIC_BUILD_ID`
+3. **postbuild** (`scripts/postbuild.mjs`): Copies `.build_id` to `out/_build_id.txt`
+
+The `UpdateChecker` component polls `/_build_id.txt` in production to detect new deployments and prompts users to refresh.
 
 ## Environment Variables
 
@@ -730,7 +921,7 @@ Get these from: Firebase Console → Project Settings → Your Apps → Web App 
 - `DealInputs.investors` is always `[]` in Firestore. Do NOT read it from the form or saved deal to drive investor returns — always bridge from `useInvestors()` at the `modelOutput` useMemo call site.
 
 **Waterfall Phase**
-- Phase derivation uses `postRecoupInvestorSplit < 1.0` to determine if profit sharing is active — **not** the `hasProfitSharing` boolean. The boolean is a UI affordance only.
+- **Known inconsistency**: `calculateWeeklyResult` in `calculations.ts` gates the effective investor split using `hasProfitSharing` (when false, investors receive 0% post-recoup). However, `waterfallPhase.ts` derives phase state from `postRecoupInvestorSplit < 1.0` regardless of the toggle. This means the phase badge can show "Profit Sharing" while the actual calculations give investors nothing if the toggle is off.
 - `capitalReturned = MIN(totalInvestorDistributions, cap)` — never exceeds capitalization.
 - `profitDistributions = MAX(0, totalInvestorDistributions − cap)` — only non-zero post-recoupment.
 
@@ -739,6 +930,7 @@ Get these from: Firebase Console → Project Settings → Your Apps → Web App 
 - Firestore rejects `undefined` values — always call `stripUndefined()` before `setDoc`.
 - The Zustand store persist key changed from `"broadway-deal-draft"` to `"deal-builder-ui"`. The old key is defunct — any `useDealStore` code referencing `draftInputs`, `mergeDraftSection`, or `clearDraft` is from a deleted version and should not be re-introduced.
 - Deal room documents live in the **top-level** `dealRooms` collection, not as a subcollection of productions. The token is the document ID.
+- `deleteProduction()` only deletes the root production document. Subcollections (`dealInputs`, `investors`, `producerPools`, `scenarios`) and Storage files are **not** cascade-deleted — they become orphaned. This is a known gap.
 
 **UI**
 - Recharts Tooltip `formatter` props use `unknown` types — cast with `Number(v)` and `String(name)`.
