@@ -1,0 +1,57 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // User profiles — each user can only read/write their own
+    match /users/{userId} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+    }
+
+    // Productions — users can only access their own productions
+    match /productions/{productionId} {
+      allow read, update, delete: if request.auth != null
+        && resource.data.userId == request.auth.uid;
+      allow create: if request.auth != null
+        && request.resource.data.userId == request.auth.uid;
+
+      // Deal inputs subcollection
+      match /dealInputs/{dealInputId} {
+        allow read, write: if request.auth != null
+          && get(/databases/$(database)/documents/productions/$(productionId)).data.userId
+          == request.auth.uid;
+      }
+
+      // Scenarios subcollection
+      match /scenarios/{scenarioId} {
+        allow read, write: if request.auth != null
+          && get(/databases/$(database)/documents/productions/$(productionId)).data.userId
+          == request.auth.uid;
+      }
+
+      // Capitalization investors subcollection
+      match /investors/{investorId} {
+        allow read, write: if request.auth != null
+          && get(/databases/$(database)/documents/productions/$(productionId)).data.userId
+          == request.auth.uid;
+      }
+
+      // Producer pools subcollection
+      match /producerPools/{poolId} {
+        allow read, write: if request.auth != null
+          && get(/databases/$(database)/documents/productions/$(productionId)).data.userId
+          == request.auth.uid;
+      }
+    }
+
+    // Deal Rooms — publicly readable when active; only the owner can write
+    // The share token IS the document ID. Knowing the token grants read access.
+    // No individual investor data is stored here — only deal economics snapshots.
+    match /dealRooms/{token} {
+      allow read: if resource.data.isActive == true;
+      allow create: if request.auth != null
+        && request.resource.data.ownedByUserId == request.auth.uid;
+      allow update, delete: if request.auth != null
+        && resource.data.ownedByUserId == request.auth.uid;
+    }
+  }
+}
