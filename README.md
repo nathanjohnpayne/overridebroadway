@@ -100,7 +100,7 @@ src/
 
 ## Documentation
 
-- **[CLAUDE.md](./CLAUDE.md)** — Comprehensive project documentation covering architecture, financial model, data model, types, industry benchmarks, and development guidelines
+- **[AGENTS.md](./AGENTS.md)** — Comprehensive project documentation covering architecture, financial model, data model, types, industry benchmarks, and development guidelines
 - **[ARCHITECTURE.md](./ARCHITECTURE.md)** — Onboarding guide with system overview, routing model, and common change patterns
 
 ## Firebase Project
