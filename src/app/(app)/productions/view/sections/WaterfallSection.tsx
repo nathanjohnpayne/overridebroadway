@@ -40,7 +40,7 @@ export function WaterfallSection({ control, watch, setValue, modelOutput, dealIn
       <CardHeader>
         <CardTitle>Waterfall &amp; Fee Structure</CardTitle>
         <CardDescription>
-          Configure the order and terms under which revenue is distributed — from recoupment
+          Configure the order and terms under which revenue is distributed—from recoupment
           through profit sharing.
         </CardDescription>
       </CardHeader>
@@ -128,7 +128,7 @@ export function WaterfallSection({ control, watch, setValue, modelOutput, dealIn
                       </span>
                     ) : phaseState.profitSharingEnabled ? (
                       <span className="text-[10px] text-amber-700 bg-amber-50 border border-amber-200 rounded px-1.5 py-0.5">
-                        PENDING — activates after recoupment
+                        PENDING—activates after recoupment
                       </span>
                     ) : (
                       <span className="text-[10px] text-muted-foreground bg-muted border rounded px-1.5 py-0.5">
@@ -143,7 +143,7 @@ export function WaterfallSection({ control, watch, setValue, modelOutput, dealIn
                   <div className="flex items-center gap-1.5">
                     <div className="h-2.5 w-2.5 rounded-full bg-indigo-500 shrink-0" />
                     <span className="text-sm font-medium text-indigo-700">
-                      Recoupment + Profit Sharing — concurrent from week 1
+                      Recoupment + Profit Sharing—concurrent from week 1
                     </span>
                   </div>
                   <span className="text-xs text-muted-foreground">
@@ -175,7 +175,7 @@ export function WaterfallSection({ control, watch, setValue, modelOutput, dealIn
           <div>
             <Label className="text-base">Recoupment Structure</Label>
             <p className="text-xs text-muted-foreground mt-0.5">
-              Controls <em>when</em> profit participation begins — this governs the timing of
+              Controls <em>when</em> profit participation begins—this governs the timing of
               distributions, not whether they exist.
             </p>
           </div>
@@ -231,13 +231,13 @@ export function WaterfallSection({ control, watch, setValue, modelOutput, dealIn
                   : "Investor Profit Participation"}
                 <InfoTip>
                   {watchedWaterfallType === "recoup_first"
-                    ? "Whether investors share in ongoing profits after capitalization is returned. If disabled, all post-recoup operating profit goes to creatives. Most Broadway musicals include this — disabling is rare and typically applies to straight plays or limited runs."
-                    : "Whether investors participate in profit distributions. Under Share From Dollar One, participation is concurrent with recoupment — disable this only if investors receive 100% of operating profit until recouped, with no creative participation."}
+                    ? "Whether investors share in ongoing profits after capitalization is returned. If disabled, all post-recoup operating profit goes to creatives. Most Broadway musicals include this—disabling is rare and typically applies to straight plays or limited runs."
+                    : "Whether investors participate in profit distributions. Under Share From Dollar One, participation is concurrent with recoupment—disable this only if investors receive 100% of operating profit until recouped, with no creative participation."}
                 </InfoTip>
               </Label>
               <p className="text-xs text-muted-foreground mt-0.5">
                 {watchedWaterfallType === "recoup_first"
-                  ? "Configures participation — inactive during recoupment, activates after capitalization is fully returned"
+                  ? "Configures participation—inactive during recoupment, activates after capitalization is fully returned"
                   : "Investors and creatives share distributable profit from week one"}
               </p>
             </div>
@@ -262,7 +262,7 @@ export function WaterfallSection({ control, watch, setValue, modelOutput, dealIn
                 investors are fully repaid.
                 {modelOutput?.recoupWeek
                   ? ` Based on current assumptions, profit sharing activates at Week ${modelOutput.recoupWeek}.`
-                  : " Based on current assumptions, the show does not recoup within the estimated run — profit sharing will not activate."}
+                  : " Based on current assumptions, the show does not recoup within the estimated run—profit sharing will not activate."}
               </span>
             </div>
           )}
@@ -288,7 +288,7 @@ export function WaterfallSection({ control, watch, setValue, modelOutput, dealIn
                       Investor Pool (Total, incl. GP carve)
                       <InfoTip>
                         The combined % of post-recoup distributable profit allocated to the entire
-                        investor pool — LP investors plus the GP&apos;s carved share. The GP&apos;s
+                        investor pool—LP investors plus the GP&apos;s carved share. The GP&apos;s
                         portion is extracted from this pool first; LP investors receive the
                         remainder. Standard: 50%. The remaining % goes to creative participants.
                       </InfoTip>
@@ -322,7 +322,7 @@ export function WaterfallSection({ control, watch, setValue, modelOutput, dealIn
                       )}
                     />
                     <p className="text-xs text-muted-foreground">
-                      % of investor pool only — not of total profit
+                      % of investor pool only—not of total profit
                     </p>
                   </div>
                 </div>
@@ -411,7 +411,7 @@ export function WaterfallSection({ control, watch, setValue, modelOutput, dealIn
           {(watchedInvestorSplit ?? 0.5) >= 1.0 && (
             <div className="pl-4 border-l-2 border-muted text-xs text-muted-foreground py-2 space-y-1">
               <p>
-                Investor pool is set to 100% — no creative participation pool is configured.
+                Investor pool is set to 100%—no creative participation pool is configured.
               </p>
               <p>
                 All post-recoup distributable profit goes to the investor pool (LP investors + GP
@@ -431,7 +431,7 @@ export function WaterfallSection({ control, watch, setValue, modelOutput, dealIn
               <InfoTip>
                 GP fees are deducted from weekly operating profit before the waterfall split. Under
                 standard Broadway structure, GP compensation applies every profitable week regardless
-                of recoupment status — i.e., before investors recoup. This ordering is fixed in the
+                of recoupment status—i.e., before investors recoup. This ordering is fixed in the
                 calculation engine.
               </InfoTip>
             </Label>
@@ -460,8 +460,7 @@ export function WaterfallSection({ control, watch, setValue, modelOutput, dealIn
                 GP Management Fee Rate
                 <InfoTip>
                   Weekly % of positive operating profit paid to the GP as a management/production
-                  fee. Typical range: 1–3%. Applied before both recoupment and profit sharing —
-                  active every profitable week.
+                  fee. Typical range: 1–3%. Applied before both recoupment and profit sharing—active every profitable week.
                 </InfoTip>
               </Label>
               <Controller
@@ -489,7 +488,7 @@ export function WaterfallSection({ control, watch, setValue, modelOutput, dealIn
                   Fixed Weekly Payment
                   <InfoTip>
                     A flat dollar amount paid to the GP each week from operating profit, applied
-                    before percentage fees. Capped at available profit — cannot create a loss.
+                    before percentage fees. Capped at available profit—cannot create a loss.
                   </InfoTip>
                 </Label>
                 <Controller
@@ -553,12 +552,12 @@ export function WaterfallSection({ control, watch, setValue, modelOutput, dealIn
                   }`}
                 >
                   <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-widest">
-                    Effective GP Economics — all channels
+                    Effective GP Economics—all channels
                   </p>
                   {hasMultiple && (
                     <InfoTip>
                       Multiple GP compensation channels are active simultaneously. Ensure this is
-                      intentional — the aggregate take will be higher than any single rate suggests.
+                      intentional—the aggregate take will be higher than any single rate suggests.
                     </InfoTip>
                   )}
                 </div>
@@ -597,7 +596,7 @@ export function WaterfallSection({ control, watch, setValue, modelOutput, dealIn
                   )}
                   {hasMultiple && (
                     <div className="pt-1.5 border-t border-amber-200 text-amber-700">
-                      ⚠ {activeChannels} GP channels active — verify the aggregate is intentional
+                      ⚠ {activeChannels} GP channels active—verify the aggregate is intentional
                     </div>
                   )}
                 </div>
@@ -618,7 +617,7 @@ export function WaterfallSection({ control, watch, setValue, modelOutput, dealIn
                   A negotiated reduction to the total weekly royalty obligation, active during
                   recoupment only. Reduces the aggregate royalty bill by a fixed dollar amount each
                   week, increasing operating profit available for investor recoupment. Has no effect
-                  after recoupment — it does not change post-recoup creative participation
+                  after recoupment—it does not change post-recoup creative participation
                   percentages.
                 </InfoTip>
               </Label>
@@ -650,7 +649,7 @@ export function WaterfallSection({ control, watch, setValue, modelOutput, dealIn
                 Weekly Offset Amount
                 <InfoTip>
                   The fixed dollar amount subtracted from total royalties each week during
-                  recoupment. The royalty bill is floored at $0 — if royalties are below the
+                  recoupment. The royalty bill is floored at $0—if royalties are below the
                   offset, the excess does not carry forward to subsequent weeks.
                 </InfoTip>
               </Label>

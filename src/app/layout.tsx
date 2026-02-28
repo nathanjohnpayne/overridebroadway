@@ -20,11 +20,11 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "Override",
   description:
-    "Override is the financial operating platform for Broadway producers — from modeling your capitalization to managing investors, tracking recoupment, and distributing returns.",
+    "Override is the financial operating platform for Broadway producers—from modeling your capitalization to managing investors, tracking recoupment, and distributing returns.",
   keywords: ["Broadway", "investment", "theatre", "recoupment", "waterfall", "producer"],
   openGraph: {
     title: "Override",
-    description: "The financial operating platform for Broadway producers — deal modeling, investor management, and private deal rooms.",
+    description: "The financial operating platform for Broadway producers—deal modeling, investor management, and private deal rooms.",
     url: "https://overridebroadway.com",
     siteName: "Override",
     images: [
@@ -32,7 +32,7 @@ export const metadata: Metadata = {
         url: "https://overridebroadway.com/og-image.png",
         width: 1200,
         height: 630,
-        alt: "Override — Broadway Deal Modeling & Investor Management",
+        alt: "Override—Broadway Deal Modeling & Investor Management",
       },
     ],
     type: "website",
@@ -40,7 +40,7 @@ export const metadata: Metadata = {
   twitter: {
     card: "summary_large_image",
     title: "Override",
-    description: "The financial operating platform for Broadway producers — deal modeling, investor management, and private deal rooms.",
+    description: "The financial operating platform for Broadway producers—deal modeling, investor management, and private deal rooms.",
     images: ["https://overridebroadway.com/og-image.png"],
   },
 };

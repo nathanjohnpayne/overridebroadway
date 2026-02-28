@@ -27,7 +27,7 @@ export default function LandingPage() {
         <h1 className="text-5xl font-bold tracking-tight mb-4">Override</h1>
         <p className="text-2xl text-muted-foreground font-medium mb-6">You run the show. Override runs the money.</p>
         <p className="text-lg text-muted-foreground mb-10 max-w-2xl mx-auto">
-          The financial operating platform for Broadway producers — from structuring your capitalization
+          The financial operating platform for Broadway producers—from structuring your capitalization
           to managing investors, stress-testing deals, and sharing terms with your backers.
         </p>
         <div className="flex gap-4 justify-center flex-wrap">
@@ -45,7 +45,7 @@ export default function LandingPage() {
         <div className="max-w-5xl mx-auto">
           <h2 className="text-3xl font-bold text-center mb-4">Everything a producer needs</h2>
           <p className="text-center text-muted-foreground mb-12 max-w-2xl mx-auto">
-            A complete production workspace — financial modeling, investor CRM, and a private deal room for your backers.
+            A complete production workspace—financial modeling, investor CRM, and a private deal room for your backers.
           </p>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {[
@@ -62,7 +62,7 @@ export default function LandingPage() {
               {
                 icon: TrendingUp,
                 title: "Investor Returns",
-                desc: "Per-investor ROI, cash-on-cash multiples, IRR, and recoupment forecasts — automatically driven from your cap table.",
+                desc: "Per-investor ROI, cash-on-cash multiples, IRR, and recoupment forecasts—automatically driven from your cap table.",
               },
               {
                 icon: Users,
@@ -72,12 +72,12 @@ export default function LandingPage() {
               {
                 icon: FileText,
                 title: "Documents",
-                desc: "Attach production-level agreements and per-investor executed copies of the instruction letter, signature page, and subscription agreement — organized by stage.",
+                desc: "Attach production-level agreements and per-investor executed copies of the instruction letter, signature page, and subscription agreement—organized by stage.",
               },
               {
                 icon: Share2,
                 title: "Investor Deal Room",
-                desc: "Share a private link with backers — no login required. They see your deal structure, Bear/Base/Bull scenarios, and waterfall visualization. You control what's visible.",
+                desc: "Share a private link with backers—no login required. They see your deal structure, Bear/Base/Bull scenarios, and waterfall visualization. You control what's visible.",
               },
               {
                 icon: Briefcase,
@@ -118,7 +118,7 @@ export default function LandingPage() {
             {
               step: "04",
               title: "Share with backers",
-              desc: "Generate a private Deal Room link. Investors see your economics and scenarios — no account required.",
+              desc: "Generate a private Deal Room link. Investors see your economics and scenarios—no account required.",
             },
           ].map(({ step, title, desc }) => (
             <div key={step} className="text-center">
@@ -134,8 +134,7 @@ export default function LandingPage() {
       <section className="px-6 py-16 bg-primary text-primary-foreground text-center">
         <h2 className="text-3xl font-bold mb-4">Ready to stress-test your deal?</h2>
         <p className="text-primary-foreground/80 mb-8 max-w-xl mx-auto">
-          Built for Broadway producers who want transparent, auditable financials —
-          and a better way to bring investors into the conversation.
+          Built for Broadway producers who want transparent, auditable financials—and a better way to bring investors into the conversation.
         </p>
         <Button size="lg" variant="secondary" asChild>
           <Link href="/signup">Create your first production <ArrowRight className="ml-2 h-4 w-4" /></Link>

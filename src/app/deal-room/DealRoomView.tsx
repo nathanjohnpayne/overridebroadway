@@ -542,7 +542,7 @@ export default function DealRoomView({ dealRoom }: DealRoomViewProps) {
           <p className="pt-1">
             Powered by{" "}
             <span className="font-medium text-foreground">Override</span>
-            {" — "}the financial operating platform for Broadway producers.
+            {"—"}the financial operating platform for Broadway producers.
           </p>
         </footer>
       </main>

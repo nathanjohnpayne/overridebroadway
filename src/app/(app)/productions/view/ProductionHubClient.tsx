@@ -326,7 +326,7 @@ function OutcomeSensitivityGrid({
 
           {/* Footer note */}
           <p className="text-[10px] text-muted-foreground px-4 py-2 border-t">
-            Color reflects investor outcome only — recoup timing does not determine color.
+            Color reflects investor outcome only—recoup timing does not determine color.
             Hover any cell for full scenario detail.
             {dealInputs && dealInputs.totalCapitalization > 0
               ? ` Cap: ${formatCurrency(dealInputs.totalCapitalization, true)}.`
@@ -1572,7 +1572,7 @@ export default function ProductionHubClient() {
 
               {/* Multi-scenario chart */}
               <Card className="mb-6">
-                <CardHeader><CardTitle className="text-base">Cumulative P&L — All Scenarios</CardTitle></CardHeader>
+                <CardHeader><CardTitle className="text-base">Cumulative P&L—All Scenarios</CardTitle></CardHeader>
                 <CardContent>
                   <ResponsiveContainer width="100%" height={300}>
                     <LineChart data={scenarioChartData} margin={{ top: 5, right: 20, left: 10, bottom: 5 }}>

@@ -19,18 +19,18 @@ Override is a Broadway production finance platform with three primary surfaces:
 - Forms: react-hook-form (Controller + watch pattern; zod installed but unused for validation)
 - State: Zustand with persist middleware (UI state only)
 - Toasts: Sonner
-- Backend: Firebase 12 — Auth, Firestore, Storage, Analytics
+- Backend: Firebase 12—Auth, Firestore, Storage, Analytics
 - Hosting: Firebase Hosting serving `out/`
 
 Key files:
 
-- `next.config.ts` — static export, build ID injection, image unoptimization
-- `src/lib/firebase.ts` — singleton Firebase init with browser guard
-- `src/lib/firestore.ts` — all Firestore CRUD + `stripUndefined()` helper
-- `src/lib/storage.ts` — artwork + PDF upload helpers
-- `firebase.json` — hosting config, cache headers, SPA rewrite
-- `firestore.rules` — owner-only production access, public deal rooms
-- `storage.rules` — owner-only file access
+- `next.config.ts`—static export, build ID injection, image unoptimization
+- `src/lib/firebase.ts`—singleton Firebase init with browser guard
+- `src/lib/firestore.ts`—all Firestore CRUD + `stripUndefined()` helper
+- `src/lib/storage.ts`—artwork + PDF upload helpers
+- `firebase.json`—hosting config, cache headers, SPA rewrite
+- `firestore.rules`—owner-only production access, public deal rooms
+- `storage.rules`—owner-only file access
 
 ## 3) Runtime and Routing Model
 
@@ -48,12 +48,12 @@ To keep browser-only dependencies safe with static export:
 
 | Route | Auth | Component |
 |-------|------|-----------|
-| `/` | No | `src/app/page.tsx` — marketing landing page |
-| `/login` | No | `src/app/(auth)/login/page.tsx` — email + Google sign-in |
-| `/signup` | No | `src/app/(auth)/signup/page.tsx` — registration |
-| `/dashboard` | Yes | `src/app/(app)/dashboard/page.tsx` — productions grid (`?view=investments` for investor view) |
+| `/` | No | `src/app/page.tsx`—marketing landing page |
+| `/login` | No | `src/app/(auth)/login/page.tsx`—email + Google sign-in |
+| `/signup` | No | `src/app/(auth)/signup/page.tsx`—registration |
+| `/dashboard` | Yes | `src/app/(app)/dashboard/page.tsx`—productions grid (`?view=investments` for investor view) |
 | `/productions/view?id=<uuid>` | Yes | `src/app/(app)/productions/view/page.tsx` → `ProductionDynamicLoader` → `ProductionHubClient` |
-| `/productions/new` | Yes | `src/app/(app)/productions/new/page.tsx` — redirect stub → `/dashboard` |
+| `/productions/new` | Yes | `src/app/(app)/productions/new/page.tsx`—redirect stub → `/dashboard` |
 | `/deal-room?token=<uuid>` | No | `src/app/deal-room/page.tsx` → `DealRoomDynamicLoader` → `DealRoomClient` → `DealRoomView` |
 
 Auth boundary:
@@ -87,11 +87,11 @@ Important behavioral rules:
 
 Production-level files at `productions/{userId}/{productionId}/`:
 
-- `artwork` — production artwork image (max 5MB)
-- `operating-agreement.pdf` — operating agreement (max 20MB)
-- `instruction-letter.pdf` — investor instruction letter
-- `member-signature-page.pdf` — member signature page
-- `subscription-agreement.pdf` — subscription agreement
+- `artwork`—production artwork image (max 5MB)
+- `operating-agreement.pdf`—operating agreement (max 20MB)
+- `instruction-letter.pdf`—investor instruction letter
+- `member-signature-page.pdf`—member signature page
+- `subscription-agreement.pdf`—subscription agreement
 
 Investor files at `productions/{userId}/{productionId}/investors/{investorId}/`:
 
@@ -236,11 +236,11 @@ Firebase Analytics is initialized in `AnalyticsInit` component (browser-only). T
 
 ## 14) Current Risks / Mismatches To Be Aware Of
 
-1. **Waterfall toggle inconsistency** — `calculateWeeklyResult` in `calculations.ts` gates the effective investor split using `hasProfitSharing` (when false, `effectiveInvestorSplit` is forced to 0%). However, `deriveWaterfallPhaseState` in `waterfallPhase.ts` derives phase state from `postRecoupInvestorSplit < 1.0` regardless of the toggle. This means the waterfall phase badge can display "Profit Sharing" while the actual financial calculations give investors 0% post-recoup if `hasProfitSharing` is false.
+1. **Waterfall toggle inconsistency**—`calculateWeeklyResult` in `calculations.ts` gates the effective investor split using `hasProfitSharing` (when false, `effectiveInvestorSplit` is forced to 0%). However, `deriveWaterfallPhaseState` in `waterfallPhase.ts` derives phase state from `postRecoupInvestorSplit < 1.0` regardless of the toggle. This means the waterfall phase badge can display "Profit Sharing" while the actual financial calculations give investors 0% post-recoup if `hasProfitSharing` is false.
 
-2. **Production deletion does not cascade** — `deleteProduction()` in `firestore.ts` only deletes the root production document. Subcollections (`dealInputs/primary`, `investors/*`, `producerPools/*`, `scenarios/*`) and associated Storage files are not cleaned up, resulting in orphaned data.
+2. **Production deletion does not cascade**—`deleteProduction()` in `firestore.ts` only deletes the root production document. Subcollections (`dealInputs/primary`, `investors/*`, `producerPools/*`, `scenarios/*`) and associated Storage files are not cleaned up, resulting in orphaned data.
 
-3. **Unused dependencies** — `zod`, `date-fns`, `@hookform/resolvers`, and `next-themes` are installed but have no direct imports in application code (some may be transitive requirements of shadcn/ui components).
+3. **Unused dependencies**—`zod`, `date-fns`, `@hookform/resolvers`, and `next-themes` are installed but have no direct imports in application code (some may be transitive requirements of shadcn/ui components).
 
 ## 15) Where To Edit For Common Changes
 

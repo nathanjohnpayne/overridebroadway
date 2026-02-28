@@ -1,17 +1,17 @@
 # Override
 
-Override is the financial operating platform for Broadway producers — from modeling your capitalization to managing investors, tracking recoupment, and distributing returns.
+Override is the financial operating platform for Broadway producers—from modeling your capitalization to managing investors, tracking recoupment, and distributing returns.
 
 **Live at**: [overridebroadway.com](https://overridebroadway.com)
 
 ## Features
 
-- **Deal Builder** — Guided or direct-edit workflow for structuring Broadway production deals (capitalization, weekly economics, revenue, royalties, waterfall)
-- **Financial Model** — Real-time per-week P&L projections with breakeven analysis, IRR calculation, and investor return modeling
-- **Scenario Analysis** — Bear/Base/Bull scenario comparison with an occupancy × run-length sensitivity grid
-- **Capitalization Management** — Full investor cap table with status tracking, document management, and producer pool organization
-- **Deal Room** — Public, token-secured investor workspace with snapshotted deal economics (no login required)
-- **Waterfall Engine** — Configurable recoup-first or share-from-dollar-one distribution structures with GP fee layering
+- **Deal Builder**—Guided or direct-edit workflow for structuring Broadway production deals (capitalization, weekly economics, revenue, royalties, waterfall)
+- **Financial Model**—Real-time per-week P&L projections with breakeven analysis, IRR calculation, and investor return modeling
+- **Scenario Analysis**—Bear/Base/Bull scenario comparison with an occupancy × run-length sensitivity grid
+- **Capitalization Management**—Full investor cap table with status tracking, document management, and producer pool organization
+- **Deal Room**—Public, token-secured investor workspace with snapshotted deal economics (no login required)
+- **Waterfall Engine**—Configurable recoup-first or share-from-dollar-one distribution structures with GP fee layering
 
 ## Tech Stack
 
@@ -100,8 +100,8 @@ src/
 
 ## Documentation
 
-- **[AGENTS.md](./AGENTS.md)** — Comprehensive project documentation covering architecture, financial model, data model, types, industry benchmarks, and development guidelines
-- **[ARCHITECTURE.md](./ARCHITECTURE.md)** — Onboarding guide with system overview, routing model, and common change patterns
+- **[AGENTS.md](./AGENTS.md)**—Comprehensive project documentation covering architecture, financial model, data model, types, industry benchmarks, and development guidelines
+- **[ARCHITECTURE.md](./ARCHITECTURE.md)**—Onboarding guide with system overview, routing model, and common change patterns
 
 ## Firebase Project
 
@@ -111,4 +111,4 @@ src/
 
 ## License
 
-Private — All rights reserved.
+Private—All rights reserved.

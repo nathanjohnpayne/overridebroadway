@@ -120,7 +120,7 @@ export function WaterfallFlow({ modelOutput, dealInputs }: WaterfallFlowProps) {
     viewMode === "pre" ? "→ Investor Recoupment" : "→ Investor Profit Distribution";
   const distributionTooltip =
     viewMode === "pre"
-      ? "Pre-recoupment: 100% of distributable profit goes toward returning investor capital. This is return of capital — not a profit distribution — until the full capitalization is recovered."
+      ? "Pre-recoupment: 100% of distributable profit goes toward returning investor capital. This is return of capital—not a profit distribution—until the full capitalization is recovered."
       : "Post-recoupment: LP investors receive their profit-sharing percentage of distributable profit. This is after the GP carve is extracted from the investor pool. Capital has been fully returned.";
 
   const coreStages: StageRow[] = [
@@ -235,7 +235,7 @@ export function WaterfallFlow({ modelOutput, dealInputs }: WaterfallFlowProps) {
           type: "split",
           label: "→ Creative Participants",
           tooltip:
-            "Post-recoupment profit share paid to creative participants. This is separate from and in addition to their weekly royalties — it's their share of the ongoing profit split.",
+            "Post-recoupment profit share paid to creative participants. This is separate from and in addition to their weekly royalties—it's their share of the ongoing profit split.",
           amount: w.creativeDistribution,
           borderColor: "border-l-teal-500",
           amountColor: "text-teal-700",
@@ -267,9 +267,9 @@ export function WaterfallFlow({ modelOutput, dealInputs }: WaterfallFlowProps) {
             {phaseState.phase === WaterfallPhase.RECOUPMENT &&
               `Generating profit but capitalization not yet returned. ${phaseState.recoupWeek ? `Recoupment projected at Week ${phaseState.recoupWeek}.` : "Show does not recoup within the estimated run."}`}
             {phaseState.phase === WaterfallPhase.POST_RECOUP_PROFIT_SHARING &&
-              `Capitalization returned at Week ${phaseState.recoupWeek}. Post-recoup profit sharing active — LP investors, GP, and creatives all participate.`}
+              `Capitalization returned at Week ${phaseState.recoupWeek}. Post-recoup profit sharing active—LP investors, GP, and creatives all participate.`}
             {phaseState.phase === WaterfallPhase.CLOSED &&
-              `Capitalization returned at Week ${phaseState.recoupWeek}. Investor pool takes 100% of post-recoup profit — no creative participation configured.`}
+              `Capitalization returned at Week ${phaseState.recoupWeek}. Investor pool takes 100% of post-recoup profit—no creative participation configured.`}
           </p>
         </div>
 
@@ -406,7 +406,7 @@ export function WaterfallFlow({ modelOutput, dealInputs }: WaterfallFlowProps) {
           {/* Loss week callout */}
           {isLossWeek && (
             <div className="mt-3 rounded-lg bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">
-              <strong>Loss week:</strong> Operating profit is negative — no waterfall distributions occur. All losses are borne by the production.
+              <strong>Loss week:</strong> Operating profit is negative—no waterfall distributions occur. All losses are borne by the production.
             </div>
           )}
 
@@ -476,7 +476,7 @@ export function WaterfallFlow({ modelOutput, dealInputs }: WaterfallFlowProps) {
               {
                 label: "Capital Returned",
                 value: formatCurrency(phaseState.capitalReturned),
-                tooltip: "The portion of investor distributions that represents return of original capital — up to the full capitalization amount.",
+                tooltip: "The portion of investor distributions that represents return of original capital—up to the full capitalization amount.",
                 valueClass: phaseState.capitalReturned >= dealInputs.totalCapitalization ? "text-green-700" : undefined,
               },
               {
@@ -598,20 +598,20 @@ export function WaterfallFlow({ modelOutput, dealInputs }: WaterfallFlowProps) {
               {/* Context note: show doesn't recoup */}
               {!modelOutput.recoupWeek && (
                 <div className="rounded-md bg-amber-50 border border-amber-200 px-3 py-2 text-xs text-amber-700">
-                  The show does not recoup within the estimated run — post-recoup profit distributions are $0. The split above shows the contractual structure that would apply if recoupment were achieved.
+                  The show does not recoup within the estimated run—post-recoup profit distributions are $0. The split above shows the contractual structure that would apply if recoupment were achieved.
                 </div>
               )}
 
               {/* Context note: in recoupment (show does recoup but post-recoup dists are partial) */}
               {modelOutput.recoupWeek && phaseState.profitDistributions === 0 && totalLpDist > 0 && (
                 <div className="rounded-md bg-blue-50 border border-blue-200 px-3 py-2 text-xs text-blue-700">
-                  All investor distributions represent return of capital — no post-recoup profit distributions yet in this run length.
+                  All investor distributions represent return of capital—no post-recoup profit distributions yet in this run length.
                 </div>
               )}
 
               <div className="text-xs text-muted-foreground pt-1 border-t flex items-center gap-1.5">
                 <InfoTip>
-                  LP investors receive {formatPercent(netLpPct)} of post-recoup operating profit. The GP carve ({formatPercent(gpCarvePct)}) is extracted from the investor pool before LP distributions — not from the creative pool. Creatives receive {formatPercent(creativePct)} as their ongoing profit participation, which is separate from and in addition to their weekly royalties.
+                  LP investors receive {formatPercent(netLpPct)} of post-recoup operating profit. The GP carve ({formatPercent(gpCarvePct)}) is extracted from the investor pool before LP distributions—not from the creative pool. Creatives receive {formatPercent(creativePct)} as their ongoing profit participation, which is separate from and in addition to their weekly royalties.
                 </InfoTip>
                 <span>
                   Investor pool {formatPercent(investorSplit)} total → LP {formatPercent(netLpPct)} + GP carve {formatPercent(gpCarvePct)} · Creatives {formatPercent(creativePct)}

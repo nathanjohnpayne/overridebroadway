@@ -344,7 +344,7 @@ export function DealRoomSetup({
                   Share your deal with investors
                 </h3>
                 <p className="text-sm text-muted-foreground mt-1 mb-4 leading-relaxed">
-                  Create a secure, read-only Deal Room — a private link that gives investors
+                  Create a secure, read-only Deal Room—a private link that gives investors
                   a professional view of your financial model, waterfall structure, and key
                   deal terms. No login required for investors.
                 </p>
@@ -353,7 +353,7 @@ export function DealRoomSetup({
                   <div className="flex items-start gap-2 rounded-md bg-amber-50 border border-amber-200 px-3 py-2.5 text-xs text-amber-700 mb-4">
                     <AlertTriangle className="h-3.5 w-3.5 shrink-0 mt-0.5" />
                     <span>
-                      Complete your deal structure first — capitalization and house capacity
+                      Complete your deal structure first—capitalization and house capacity
                       are required before creating a deal room.
                     </span>
                   </div>
@@ -552,7 +552,7 @@ export function DealRoomSetup({
           <ToggleRow
             id="showFinancialModel"
             label="Financial Scenarios"
-            description="Bear, Base, and Bull case projections — investor multiples, recoup week, breakeven occupancy, and IRR."
+            description="Bear, Base, and Bull case projections—investor multiples, recoup week, breakeven occupancy, and IRR."
             checked={config.showFinancialModel}
             onChange={(v) => setConfig((c) => ({ ...c, showFinancialModel: v }))}
           />

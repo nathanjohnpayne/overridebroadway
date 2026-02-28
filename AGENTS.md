@@ -1,6 +1,6 @@
 # Override
 
-Override is the financial operating platform for Broadway producers — from modeling your capitalization to managing investors, tracking recoupment, and distributing returns.
+Override is the financial operating platform for Broadway producers—from modeling your capitalization to managing investors, tracking recoupment, and distributing returns.
 
 ## Tech Stack
 
@@ -11,7 +11,7 @@ Override is the financial operating platform for Broadway producers — from mod
 - **Forms**: react-hook-form (values managed via Controller + watch; zod is installed but not used for form validation)
 - **State**: Zustand with persist middleware (guided mode UI state across page refreshes)
 - **Toasts**: Sonner (used for success/error feedback across auth, save, upload, and deal room flows)
-- **Backend**: Firebase 12 — Auth, Firestore, Storage, Analytics
+- **Backend**: Firebase 12—Auth, Firestore, Storage, Analytics
 - **Hosting**: Firebase Hosting (static export)
 - **Domain**: overridebroadway.com (custom domain via Firebase Hosting)
 
@@ -27,7 +27,7 @@ src/
 │   ├── (app)/layout.tsx       # App shell: sticky nav, auth guard, skeleton
 │   ├── (app)/dashboard/       # Portfolio grid (?view=investments for My Investments mode)
 │   ├── (app)/productions/new/ # Legacy redirect stub → /dashboard
-│   ├── (app)/productions/view/ # Production hub — uses ?id= query param
+│   ├── (app)/productions/view/ # Production hub—uses ?id= query param
 │   │   ├── page.tsx                    # Server wrapper: generateStaticParams
 │   │   ├── ProductionDynamicLoader.tsx  # Client: next/dynamic ssr:false
 │   │   ├── ProductionHubClient.tsx      # Main client component (owns useForm)
@@ -104,7 +104,7 @@ Firebase Hosting serves static files, but production IDs are Firestore UUIDs unk
 
 The same pattern is used for the Deal Room: `/deal-room?token=<uuid>`. The token IS the Firestore document ID.
 
-Never add `"use client"` to `app/(app)/productions/view/page.tsx` — that breaks `generateStaticParams`. Never use `next/dynamic` with `ssr: false` directly in a server component — use the `ProductionDynamicLoader` / `DealRoomDynamicLoader` client loader pattern.
+Never add `"use client"` to `app/(app)/productions/view/page.tsx`—that breaks `generateStaticParams`. Never use `next/dynamic` with `ssr: false` directly in a server component—use the `ProductionDynamicLoader` / `DealRoomDynamicLoader` client loader pattern.
 
 ### Firebase Initialization
 The Firebase app is initialized with a placeholder `apiKey` during SSR/prerender (when `typeof window === 'undefined'`) to prevent build failures. Real keys come from `.env.local` at runtime.
@@ -112,7 +112,7 @@ The Firebase app is initialized with a placeholder `apiKey` during SSR/prerender
 ### Auth Persistence
 `browserLocalPersistence` is set on the Firebase Auth instance to prevent users from being logged out on navigation in the static export context. The `(app)` layout shows a skeleton while `loading || !user` to prevent flash redirects.
 
-The `/deal-room` route lives **outside** the `(app)` route group intentionally — it has no auth requirement. Investors access it via a private token URL with no login.
+The `/deal-room` route lives **outside** the `(app)` route group intentionally—it has no auth requirement. Investors access it via a private token URL with no login.
 
 ### Firestore Data Model
 ```
@@ -137,15 +137,15 @@ Composite indexes (`firestore.indexes.json`):
 Firestore rejects documents containing `undefined` values. All saves go through `stripUndefined<T>()` in `firestore.ts`, which recursively removes `undefined` fields while preserving Firestore sentinel values (detected via `_methodName` duck-typing).
 
 ### Form State Ownership
-There is **one** `useForm<DealInputs>()` instance — it lives in `ProductionHubClient`. All section components and `DealBuilder` receive `control`, `watch`, `setValue`, `getValues`, `handleSubmit` as props. No section component creates its own form instance. This prevents state sync issues and keeps Firestore as the single source of truth.
+There is **one** `useForm<DealInputs>()` instance—it lives in `ProductionHubClient`. All section components and `DealBuilder` receive `control`, `watch`, `setValue`, `getValues`, `handleSubmit` as props. No section component creates its own form instance. This prevents state sync issues and keeps Firestore as the single source of truth.
 
 ### Live Model Updates
 `ProductionHubClient` calls `watch()` on all form values. The model is recomputed as `runScenario({ ...dealInputs, ...liveFormValues }, scenario)` so any edit reflects immediately in the Financial Model tab and LiveOutcomePanel without requiring a save.
 
-**ATP is always locked to the deal input value** on the Financial Model tab — it is a read-only display, not an editable field. The Scenarios tab has independent ATP inputs for what-if comparison.
+**ATP is always locked to the deal input value** on the Financial Model tab—it is a read-only display, not an editable field. The Scenarios tab has independent ATP inputs for what-if comparison.
 
 ### Investor Bridge: CapitalizationInvestor → Financial Model
-`CapitalizationInvestor[]` records (from `useInvestors`) are bridged into the simplified `Investor[]` type before `runScenario()` is called. `DealInputs.investors` is a legacy field that is always `[]` in Firestore — it is overridden at computation time:
+`CapitalizationInvestor[]` records (from `useInvestors`) are bridged into the simplified `Investor[]` type before `runScenario()` is called. `DealInputs.investors` is a legacy field that is always `[]` in Firestore—it is overridden at computation time:
 
 ```typescript
 const bridgedInvestors = investors
@@ -156,8 +156,8 @@ const liveDeal = { ...dealInputs, ...liveFormValues, investors: bridgedInvestors
 
 This means per-investor returns in the Financial Model → Investor Returns tab are always driven by cap table data, not the form field.
 
-### Zustand Store — UI State Only
-`useDealStore` (persist key: `"deal-builder-ui"`) tracks **guided mode UI state only** — not deal data. Deal data lives in Firestore via `useDealInputs` + react-hook-form.
+### Zustand Store—UI State Only
+`useDealStore` (persist key: `"deal-builder-ui"`) tracks **guided mode UI state only**—not deal data. Deal data lives in Firestore via `useDealInputs` + react-hook-form.
 
 ```typescript
 interface DealBuilderUIStore {
@@ -168,25 +168,25 @@ interface DealBuilderUIStore {
 }
 ```
 
-The old `"broadway-deal-draft"` localStorage key is obsolete and can be cleared — the new key is `"deal-builder-ui"`.
+The old `"broadway-deal-draft"` localStorage key is obsolete and can be cleared—the new key is `"deal-builder-ui"`.
 
 ---
 
 ## Dashboard
 
-`/dashboard` — the authenticated home screen with two view modes controlled by query param.
+`/dashboard`—the authenticated home screen with two view modes controlled by query param.
 
 ### View Modes
 
 - **My Productions** (default): Grid of production cards the user owns. Each card shows artwork banner (blurred background effect), title, subtitle, venue, status badge, and timestamps.
 - **My Investments** (`?view=investments`): Placeholder view for productions where the user is an investor (feature stub).
 
-The nav bar in `(app)/layout.tsx` has two persistent buttons — "Productions" and "My Investments" — that toggle between these views. The active view is highlighted with a `secondary` variant button.
+The nav bar in `(app)/layout.tsx` has two persistent buttons—"Productions" and "My Investments"—that toggle between these views. The active view is highlighted with a `secondary` variant button.
 
 ### Production CRUD
 
 - **Create**: Dialog with name, status, optional subtitle/venue. Creates Firestore document and navigates to production hub.
-- **Delete**: Confirmation dialog. Currently deletes only the root production document — subcollections (dealInputs, investors, producerPools, scenarios) and Storage files are **not** cascade-deleted in app code.
+- **Delete**: Confirmation dialog. Currently deletes only the root production document—subcollections (dealInputs, investors, producerPools, scenarios) and Storage files are **not** cascade-deleted in app code.
 
 ### Production Type (production.ts)
 
@@ -279,7 +279,7 @@ interface SectionDef {
 
 ### Section Component Props
 
-Every section component accepts the same interface — no new form instances:
+Every section component accepts the same interface—no new form instances:
 
 ```typescript
 interface SectionProps {
@@ -299,16 +299,16 @@ Race prevention: autosave only fires when `isDirty === true`. Clicking the expli
 
 ### LiveOutcomePanel
 
-Read-only card. Zero business logic — all computation is upstream in `runScenario()`.
+Read-only card. Zero business logic—all computation is upstream in `runScenario()`.
 
 Displayed metrics (from first open, non-preview week):
-- **Weekly Gross** — `openWeek.grossBoxOffice`
-- **Weekly Profit** — `openWeek.operatingProfit`
-- **Breakeven Occupancy** — `modelOutput.weeklyBreakeven` (null = can never profit)
-- **Recoup Week** — `modelOutput.recoupWeek` (null = doesn't recoup in run)
-- **Investor Multiple** — shown only when fully recouped; otherwise shows capital recovery %
-- **Risk Band** — derived from breakeven: `> 0.9` → High Risk, `0.7–0.9` → Medium, `< 0.7` → Low
-- **Waterfall Phase badge** — from `deriveWaterfallPhaseState()`
+- **Weekly Gross**—`openWeek.grossBoxOffice`
+- **Weekly Profit**—`openWeek.operatingProfit`
+- **Breakeven Occupancy**—`modelOutput.weeklyBreakeven` (null = can never profit)
+- **Recoup Week**—`modelOutput.recoupWeek` (null = doesn't recoup in run)
+- **Investor Multiple**—shown only when fully recouped; otherwise shows capital recovery %
+- **Risk Band**—derived from breakeven: `> 0.9` → High Risk, `0.7–0.9` → Medium, `< 0.7` → Low
+- **Waterfall Phase badge**—from `deriveWaterfallPhaseState()`
 
 Three-case capital recovery display (not just "0.00×"):
 1. Full recoup → Recoup Week + Investor Multiple
@@ -321,16 +321,16 @@ Shows skeleton placeholders when `modelOutput` is null.
 
 ## Deal Room
 
-`/deal-room?token=<uuid>` — a public, read-only investor workspace. No login required.
+`/deal-room?token=<uuid>`—a public, read-only investor workspace. No login required.
 
 ### Architecture
 
 - **Token = Document ID**: The UUID share token is the Firestore `dealRooms/{token}` document ID. Knowing the URL is the access credential.
-- **Snapshot model**: `DealInputs` are copied at share time. Edits after sharing don't update the deal room automatically — producer must click "Update Snapshot".
+- **Snapshot model**: `DealInputs` are copied at share time. Edits after sharing don't update the deal room automatically—producer must click "Update Snapshot".
 - **No individual investor data**: Only aggregate deal economics are exposed. Cap table details never appear in the deal room.
 - **Firestore security**: `dealRooms` collection is publicly readable when `isActive == true`. Writes require `request.auth.uid == resource.data.ownedByUserId`.
 
-### Producer Workflow (DealRoomSetup.tsx — 6th tab)
+### Producer Workflow (DealRoomSetup.tsx—6th tab)
 
 1. Click "Create Deal Room" → generates UUID token, snapshots current `DealInputs` + production metadata → saves to `dealRooms/{token}`
 2. Toggle sections on/off (Financial Model, Waterfall, Capitalization Progress, Documents, Weekly Breakdown)
@@ -378,7 +378,7 @@ interface DealRoom {
 
 ## Investor Outcome Sensitivity Grid
 
-The Scenarios tab contains an "Investor Outcome Sensitivity" grid — an occupancy × run-length decision surface.
+The Scenarios tab contains an "Investor Outcome Sensitivity" grid—an occupancy × run-length decision surface.
 
 ### SensitivityCell (model.ts)
 
@@ -390,13 +390,13 @@ interface SensitivityCell {
   recoupAchieved: boolean;
   investorDistributions: number;
   investorMultiple: number;    // totalInvestorDistributions / totalCapitalization
-  investorROI: number;         // (distributions - cap) / cap — negative when partial
+  investorROI: number;         // (distributions - cap) / cap—negative when partial
   totalGrossBoxOffice: number;
   totalOperatingProfit: number;
 }
 ```
 
-All investor outcome math is computed in `generateSensitivityGrid()` in `scenarios.ts` — never re-derived in the React layer.
+All investor outcome math is computed in `generateSensitivityGrid()` in `scenarios.ts`—never re-derived in the React layer.
 
 ### Color System (outcomeColor / outcomeDisplay)
 
@@ -408,7 +408,7 @@ if (multiple <= 1.5)             → bg-green-100   (1.0–1.5× return)
 else                             → bg-green-200   (>1.5× return)
 ```
 
-### Hover Tooltip — Reflow Prevention
+### Hover Tooltip—Reflow Prevention
 
 The tooltip strip is **always rendered** with a fixed `h-9` container. It switches between detail content (when `hoveredCell` is set) and a placeholder hint (when not). This prevents the table from reflowing when hover state changes, which would cause cascading mouseLeave/mouseEnter flicker.
 
@@ -422,7 +422,7 @@ The tooltip strip is **always rendered** with a fixed `h-9` container. It switch
 
 ## Waterfall Phase Engine
 
-`src/lib/model/waterfallPhase.ts` — pure functions, no React, no side effects.
+`src/lib/model/waterfallPhase.ts`—pure functions, no React, no side effects.
 
 ### WaterfallPhase Enum
 
@@ -448,7 +448,7 @@ interface WaterfallPhaseState {
 }
 ```
 
-**Critical rule:** `profitSharingEnabled` is derived from `postRecoupInvestorSplit < 1.0` — a config ratio — never from the `hasProfitSharing` boolean toggle. The toggle only controls whether a form field is editable; it does not gate financial phase derivation.
+**Critical rule:** `profitSharingEnabled` is derived from `postRecoupInvestorSplit < 1.0`—a config ratio—never from the `hasProfitSharing` boolean toggle. The toggle only controls whether a form field is editable; it does not gate financial phase derivation.
 
 ### Phase Derivation Rules
 
@@ -468,7 +468,7 @@ Used by: `LiveOutcomePanel`, `WaterfallSection`, `WaterfallFlow`, `DealRoomView`
 `src/app/(app)/productions/view/shared/FormFields.tsx`
 
 ```typescript
-// Tooltip with Info icon — wraps TooltipProvider so it works without parent provider
+// Tooltip with Info icon—wraps TooltipProvider so it works without parent provider
 InfoTip({ children: React.ReactNode })
 
 // Displays 0–1 decimal as percentage (e.g. 0.045 → "4.50 %")
@@ -480,7 +480,7 @@ PercentInput({ value: number, onChange: (v: number) => void })
 CurrencyInput({ value: number, onChange: (v: number) => void, placeholder?: string })
 ```
 
-**Note:** `ProductionHubClient.tsx` still has its own local copies of these components (used in tabs other than the Deal Builder). Do not remove those — they serve different rendering contexts (e.g., inside the Financial Model tab, which does not use section components).
+**Note:** `ProductionHubClient.tsx` still has its own local copies of these components (used in tabs other than the Deal Builder). Do not remove those—they serve different rendering contexts (e.g., inside the Financial Model tab, which does not use section components).
 
 ---
 
@@ -542,7 +542,7 @@ Each investor's `poolPercent = investor.amount / totalCapitalization`. This ensu
 | Hook | Returns | Purpose |
 |------|---------|---------|
 | `useDealInputs(productionId)` | `{ dealInputs, loading, saving, save }` | Loads deal from Firestore on mount, exposes `save()` which calls `stripUndefined` before `setDoc` |
-| `useDebounce<T>(value, delay)` | `T` (debounced) | Generic debounce — used in DealBuilder for 1.5s autosave |
+| `useDebounce<T>(value, delay)` | `T` (debounced) | Generic debounce—used in DealBuilder for 1.5s autosave |
 | `useInvestors(productionId)` | `{ investors, loading, add, update, remove }` | Real-time onSnapshot for `investors` subcollection |
 | `useProducerPools(productionId, ownerUserId)` | `{ pools, loading, defaultPoolId, add, update, remove }` | Real-time listener for producer pools; lazy-migrates legacy investors to a "Direct Investors" default pool |
 | `useProductions()` | `{ productions, loading }` | Real-time listener for all productions owned by current user |
@@ -560,7 +560,7 @@ Key fields grouped by section:
 totalCapitalization: number
 units: number              // auto-computed: Math.round(cap / unitPrice), set via setValue
 unitPrice: number
-investors: Investor[]      // LEGACY — always [] in Firestore; overridden at compute time
+investors: Investor[]      // LEGACY—always [] in Firestore; overridden at compute time
                            // by bridging CapitalizationInvestor[] from useInvestors()
 
 // Weekly operations
@@ -650,8 +650,8 @@ interface ModelOutput {
 ### CapitalizationInvestor vs. Investor (capitalization.ts vs. deal.ts)
 
 Two separate investor types exist:
-- `Investor` (deal.ts) — simplified `{ id, name, amount, units }` used in the financial model for IRR calculations. **Never stored directly in Firestore** — always bridged at compute time from `CapitalizationInvestor`.
-- `CapitalizationInvestor` (capitalization.ts) — full investor record stored in `investors/{investorId}` subcollection; drives the Capitalization tab UI and is the source of truth for investor data.
+- `Investor` (deal.ts)—simplified `{ id, name, amount, units }` used in the financial model for IRR calculations. **Never stored directly in Firestore**—always bridged at compute time from `CapitalizationInvestor`.
+- `CapitalizationInvestor` (capitalization.ts)—full investor record stored in `investors/{investorId}` subcollection; drives the Capitalization tab UI and is the source of truth for investor data.
 
 ```typescript
 interface CapitalizationInvestor {
@@ -728,7 +728,7 @@ Hadestown: $11.5M. Dear Evan Hansen: $9.5M. Come From Away: $12M. Wicked: $14M.
 | Mid-size musical | $500–700K |
 | Large musical (post-2022 labor contracts) | $700K–$1.2M |
 
-The nut includes cast, crew, musicians, marketing, insurance, theater rent (flat component), administration. **Theater rent is already in the nut** — do not add a separate house % for the flat component, only for the gross-% component.
+The nut includes cast, crew, musicians, marketing, insurance, theater rent (flat component), administration. **Theater rent is already in the nut**—do not add a separate house % for the flat component, only for the gross-% component.
 
 ### Credit Card Fees
 Standard: **2.5–3.5%** of gross box office. Model default: 3%.
@@ -753,21 +753,21 @@ Some theaters add a flat weekly rent ($10–20K) already included in the nut, pl
 | Production company | 1.0% |
 | **Total** | **~15–18%** |
 
-**2. Pool method** (`royaltyPoolType = "pool"`): Set `royaltyPoolPercentage` to the aggregate % of adjusted gross allocated to all royalty participants combined (typically 14–18%). The pool is then split proportionally by each participant's relative rate. This is equivalent to fixed % — the "40% royalty pool" figure cited in some industry literature refers to 40% of **weekly net operating profit** (a different calculation entirely, not implemented here as it's less common for investor modeling).
+**2. Pool method** (`royaltyPoolType = "pool"`): Set `royaltyPoolPercentage` to the aggregate % of adjusted gross allocated to all royalty participants combined (typically 14–18%). The pool is then split proportionally by each participant's relative rate. This is equivalent to fixed %—the "40% royalty pool" figure cited in some industry literature refers to 40% of **weekly net operating profit** (a different calculation entirely, not implemented here as it's less common for investor modeling).
 
-**Running Royalty Offset**: A fixed weekly dollar amount (industry range: $15K–$50K/week) subtracted from the gross royalty obligation during recoupment. It reduces cash paid to royalty participants pre-recoup, increasing weekly profit available to accelerate recoupment. It has **no effect post-recoupment** — it does not reduce creative participation percentages.
+**Running Royalty Offset**: A fixed weekly dollar amount (industry range: $15K–$50K/week) subtracted from the gross royalty obligation during recoupment. It reduces cash paid to royalty participants pre-recoup, increasing weekly profit available to accelerate recoupment. It has **no effect post-recoupment**—it does not reduce creative participation percentages.
 
 ### GP Compensation Structure
 Four compensation channels, the first three applied in sequence every profitable week before the waterfall split, the fourth applied post-recoup:
-1. **GP Management Fee** (`gpFeeRate`) — % of operating profit (before flat overrides)
-2. **GP Flat Weekly** (`gpFlatWeekly`) — optional fixed $ per week (capped at remaining profit)
-3. **GP Flat Profit %** (`gpFlatProfitPercent`) — optional % of remaining profit after flat weekly
-4. **GP Post-Recoup Carve** (`gpShareOfInvestorPool`) — % of investor pool, applied post-recoup only
+1. **GP Management Fee** (`gpFeeRate`)—% of operating profit (before flat overrides)
+2. **GP Flat Weekly** (`gpFlatWeekly`)—optional fixed $ per week (capped at remaining profit)
+3. **GP Flat Profit %** (`gpFlatProfitPercent`)—optional % of remaining profit after flat weekly
+4. **GP Post-Recoup Carve** (`gpShareOfInvestorPool`)—% of investor pool, applied post-recoup only
 
 Multiple channels can be active simultaneously. The UI warns when more than one is active.
 
 ### Waterfall Structure
-- **Recoup First** (standard): 100% of weekly operating profit to investor pool until cap is returned. Then profit sharing activates per `postRecoupInvestorSplit`. The boundary week where recoupment crosses is handled correctly — the crossing amount goes to recoupment and the remainder splits post-recoup.
+- **Recoup First** (standard): 100% of weekly operating profit to investor pool until cap is returned. Then profit sharing activates per `postRecoupInvestorSplit`. The boundary week where recoupment crosses is handled correctly—the crossing amount goes to recoupment and the remainder splits post-recoup.
 - **Share From Dollar One**: LP split applies from week 1; investor distributions count toward recoupment tracking simultaneously.
 - **GP Share of Investor Pool**: GP (general partner / lead producer) typically receives 10% of the investor share as a performance fee. This is carved out before LP distributions.
 
@@ -798,7 +798,7 @@ Standard: **50% to investors (LP), 50% to producers (GP)**. The 50% LP share is 
 | **Breakeven occ.** | — | **57%** ✓ |
 | **Weeks to recoup** | — | **~37** (~8.5 mo) ✓ |
 
-Public data: Hadestown reported ~$1M average weekly gross, recouped in ~7 months. Our model produces $1.05M weekly gross at 93% occupancy — within press-reported range. Recoup at ~37 weeks is slightly longer than the ~30 weeks reported (Hadestown had particularly strong early occupancy), which makes sense as a conservative model estimate.
+Public data: Hadestown reported ~$1M average weekly gross, recouped in ~7 months. Our model produces $1.05M weekly gross at 93% occupancy—within press-reported range. Recoup at ~37 weeks is slightly longer than the ~30 weeks reported (Hadestown had particularly strong early occupancy), which makes sense as a conservative model estimate.
 
 ---
 
@@ -833,11 +833,11 @@ Public data: Hadestown reported ~$1M average weekly gross, recouped in ~7 months
 ## Storage Layout
 
 Production-level files stored at `productions/{userId}/{productionId}/`:
-- `artwork` — Production artwork image (max 5MB, images only)
-- `operating-agreement.pdf` — Operating agreement (max 20MB)
-- `instruction-letter.pdf` — Investor instruction letter
-- `member-signature-page.pdf` — Member signature page
-- `subscription-agreement.pdf` — Subscription agreement
+- `artwork`—Production artwork image (max 5MB, images only)
+- `operating-agreement.pdf`—Operating agreement (max 20MB)
+- `instruction-letter.pdf`—Investor instruction letter
+- `member-signature-page.pdf`—Member signature page
+- `subscription-agreement.pdf`—Subscription agreement
 
 Investor-level files at `productions/{userId}/{productionId}/investors/{investorId}/`:
 - `distributed/instruction-letter.pdf`
@@ -903,40 +903,40 @@ Get these from: Firebase Console → Project Settings → Your Apps → Web App 
 ## Common Pitfalls
 
 **Routing / Build**
-- Do not add `"use client"` to `app/(app)/productions/view/page.tsx` — it will break static generation
-- Do not import Firebase directly in server components — always guard with `typeof window` or use client components
-- `/deal-room` is outside the `(app)` route group by design — it has no auth requirement. Do not move it inside `(app)/`.
+- Do not add `"use client"` to `app/(app)/productions/view/page.tsx`—it will break static generation
+- Do not import Firebase directly in server components—always guard with `typeof window` or use client components
+- `/deal-room` is outside the `(app)` route group by design—it has no auth requirement. Do not move it inside `(app)/`.
 
 **Forms**
-- There is only **one** `useForm()` instance for deal inputs — it lives in `ProductionHubClient`. Never create a new `useForm()` in a section component or in `DealBuilder`.
+- There is only **one** `useForm()` instance for deal inputs—it lives in `ProductionHubClient`. Never create a new `useForm()` in a section component or in `DealBuilder`.
 - Section components must use `<Controller>` with the `control` prop passed from the parent, not local state.
 - `totalCapitalization ÷ unitPrice` auto-computes `units` via a `useEffect` + `setValue` in `ProductionHubClient`. Do not replicate this logic in section components.
 - Inline edit inputs (title, subtitle, venue, URL) use `onBlur` to cancel on focus loss. The Save button must use `onMouseDown={e => e.preventDefault()}` to prevent the blur from firing before `onSubmit`. Without this, clicking Save dismisses the input without saving.
 
 **Financial Model**
-- `calculateRoyalties()` returns `{ totalRoyalties, breakdown }` — destructure with alias if needed: `{ totalRoyalties, breakdown: royaltyBreakdown }`
-- `weeklyOfficeCharge` is kept in `DealInputs` for Firestore compatibility but is **not used in any calculation** — it is assumed to be included in `weeklyNut`
+- `calculateRoyalties()` returns `{ totalRoyalties, breakdown }`—destructure with alias if needed: `{ totalRoyalties, breakdown: royaltyBreakdown }`
+- `weeklyOfficeCharge` is kept in `DealInputs` for Firestore compatibility but is **not used in any calculation**—it is assumed to be included in `weeklyNut`
 - ATP on the Financial Model tab is read-only (locked to deal inputs). Only the Scenarios tab has independent ATP inputs.
 - The "40% royalty pool" figure in industry literature refers to 40% of **net operating profit**, not 40% of gross. Our model's `royaltyPoolPercentage` is a % of **adjusted gross** (14–18% is realistic for this field).
-- `DealInputs.investors` is always `[]` in Firestore. Do NOT read it from the form or saved deal to drive investor returns — always bridge from `useInvestors()` at the `modelOutput` useMemo call site.
+- `DealInputs.investors` is always `[]` in Firestore. Do NOT read it from the form or saved deal to drive investor returns—always bridge from `useInvestors()` at the `modelOutput` useMemo call site.
 
 **Waterfall Phase**
 - **Known inconsistency**: `calculateWeeklyResult` in `calculations.ts` gates the effective investor split using `hasProfitSharing` (when false, investors receive 0% post-recoup). However, `waterfallPhase.ts` derives phase state from `postRecoupInvestorSplit < 1.0` regardless of the toggle. This means the phase badge can show "Profit Sharing" while the actual calculations give investors nothing if the toggle is off.
-- `capitalReturned = MIN(totalInvestorDistributions, cap)` — never exceeds capitalization.
-- `profitDistributions = MAX(0, totalInvestorDistributions − cap)` — only non-zero post-recoupment.
+- `capitalReturned = MIN(totalInvestorDistributions, cap)`—never exceeds capitalization.
+- `profitDistributions = MAX(0, totalInvestorDistributions − cap)`—only non-zero post-recoupment.
 
 **Firestore**
 - Deal inputs are always saved under the fixed document ID `"primary"` within the `dealInputs` subcollection.
-- Firestore rejects `undefined` values — always call `stripUndefined()` before `setDoc`.
-- The Zustand store persist key changed from `"broadway-deal-draft"` to `"deal-builder-ui"`. The old key is defunct — any `useDealStore` code referencing `draftInputs`, `mergeDraftSection`, or `clearDraft` is from a deleted version and should not be re-introduced.
+- Firestore rejects `undefined` values—always call `stripUndefined()` before `setDoc`.
+- The Zustand store persist key changed from `"broadway-deal-draft"` to `"deal-builder-ui"`. The old key is defunct—any `useDealStore` code referencing `draftInputs`, `mergeDraftSection`, or `clearDraft` is from a deleted version and should not be re-introduced.
 - Deal room documents live in the **top-level** `dealRooms` collection, not as a subcollection of productions. The token is the document ID.
-- `deleteProduction()` only deletes the root production document. Subcollections (`dealInputs`, `investors`, `producerPools`, `scenarios`) and Storage files are **not** cascade-deleted — they become orphaned. This is a known gap.
+- `deleteProduction()` only deletes the root production document. Subcollections (`dealInputs`, `investors`, `producerPools`, `scenarios`) and Storage files are **not** cascade-deleted—they become orphaned. This is a known gap.
 
 **UI**
-- Recharts Tooltip `formatter` props use `unknown` types — cast with `Number(v)` and `String(name)`.
+- Recharts Tooltip `formatter` props use `unknown` types—cast with `Number(v)` and `String(name)`.
 - `InfoTip` in `shared/FormFields.tsx` wraps its own `TooltipProvider`. `InfoTip` in `ProductionHubClient.tsx` does not (it relies on the parent `TooltipProvider` in the shadcn Tooltip setup). Use the shared version in section components; use the local version in `ProductionHubClient`.
-- JSX string literals do **not** interpret `\u` escape sequences — they render literally. Use actual Unicode characters (e.g., `—` not `\u2014`) inside JSX tags.
-- Sensitivity grid hover tooltip: the container must always be rendered at fixed height to prevent table reflow (which causes cascading mouseLeave/mouseEnter flicker). Never conditionally mount/unmount the tooltip — toggle its content instead.
+- JSX string literals do **not** interpret `\u` escape sequences—they render literally. Use actual Unicode characters (e.g., `—` not `\u2014`) inside JSX tags.
+- Sensitivity grid hover tooltip: the container must always be rendered at fixed height to prevent table reflow (which causes cascading mouseLeave/mouseEnter flicker). Never conditionally mount/unmount the tooltip—toggle its content instead.
 
 **Google OAuth / Custom Domain**
 - For Google sign-in to work on `overridebroadway.com`, both of these must be configured:

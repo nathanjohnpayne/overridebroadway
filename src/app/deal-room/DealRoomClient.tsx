@@ -101,7 +101,7 @@ export default function DealRoomClient() {
           <p className="text-xs text-muted-foreground">
             Powered by{" "}
             <span className="font-medium text-foreground">Override</span>
-            {" — "}the financial platform for Broadway producers.
+            {"—"}the financial platform for Broadway producers.
           </p>
         </div>
       </div>
