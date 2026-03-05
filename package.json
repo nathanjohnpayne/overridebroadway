@@ -8,7 +8,9 @@
     "build": "next build",
     "postbuild": "node scripts/postbuild.mjs",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "deploy": "op-firebase-deploy",
+    "deploy:hosting": "op-firebase-deploy --only hosting"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.2.2",

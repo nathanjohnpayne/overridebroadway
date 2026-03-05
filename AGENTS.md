@@ -855,13 +855,22 @@ All uploads use `uploadBytesResumable` with optional progress callbacks. Storage
 ## Commands
 
 ```bash
-npm run dev      # Local development server (http://localhost:3000)
-npm run build    # Static export → out/ (runs prebuild + postbuild scripts)
-npm run lint     # ESLint (flat config)
-firebase deploy  # Deploy hosting + rules + storage
-firebase deploy --only hosting        # Hosting only
-firebase deploy --only firestore:rules
-firebase deploy --only storage
+npm run dev              # Local development server (http://localhost:3000)
+npm run build            # Static export → out/ (runs prebuild + postbuild scripts)
+npm run lint             # ESLint (flat config)
+npm run deploy           # Full deploy (hosting + rules + storage) via 1Password auth
+npm run deploy:hosting   # Hosting only
+op-firebase-deploy --only firestore:rules   # Any target combo
+```
+
+All deploys use `op-firebase-deploy` (global script on PATH) for non-interactive 1Password auth. No `firebase login` or browser prompts needed. The script reads ADC credentials from 1Password (`Private/GCP ADC`), auto-detects the project from `.firebaserc`, and cleans up credentials on exit.
+
+**Token renewal:** The ADC refresh token has no fixed expiry but is revoked on Google password change, explicit revocation, or 6 months of inactivity. If deploys fail with `invalid_grant`, renew:
+
+```bash
+gcloud auth application-default login --project=soyouthinkyouwant
+op item edit "GCP ADC" --vault Private \
+  "credential=$(cat ~/.config/gcloud/application_default_credentials.json)"
 ```
 
 ### Build Pipeline
