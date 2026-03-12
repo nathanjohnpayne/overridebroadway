@@ -1,0 +1,44 @@
+#!/usr/bin/env bash
+# check_spec_test_alignment — Advisory check: verifies specs/ files have corresponding test coverage.
+# ADVISORY MODE: This repo has no automated unit test suite. The specs/ directory contains
+# product specifications. Mismatches produce warnings only (exit 0).
+# Exit 0 = pass (including advisory warnings), Exit 1 = hard failure only.
+set -euo pipefail
+
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SPECS_DIR="$REPO_ROOT/specs"
+TESTS_DIR="$REPO_ROOT/tests"
+
+if [[ ! -d "$SPECS_DIR" ]]; then
+  echo "check_spec_test_alignment: SKIP (no specs/ directory)"
+  exit 0
+fi
+
+SPEC_FILES=()
+while IFS= read -r -d '' f; do
+  SPEC_FILES+=("$f")
+done < <(find "$SPECS_DIR" -name "*.md" -print0 2>/dev/null)
+
+if [[ ${#SPEC_FILES[@]} -eq 0 ]]; then
+  echo "check_spec_test_alignment: PASS (no spec files found)"
+  exit 0
+fi
+
+UNMATCHED=0
+for spec in "${SPEC_FILES[@]}"; do
+  spec_name="$(basename "$spec" .md)"
+  # Look for a corresponding test file anywhere in the repo src/ or tests/
+  if ! find "$REPO_ROOT/src" "$TESTS_DIR" -name "*${spec_name}*" -name "*.test.*" 2>/dev/null | grep -q .; then
+    echo "ADVISORY: No test file found for spec: $(basename "$spec")"
+    UNMATCHED=1
+  fi
+done
+
+if [[ $UNMATCHED -eq 1 ]]; then
+  echo "check_spec_test_alignment: ADVISORY — no automated test suite exists."
+  echo "  Verify spec coverage manually during PR review. No action required."
+  exit 0
+fi
+
+echo "check_spec_test_alignment: PASS"
+exit 0
