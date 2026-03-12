@@ -33,6 +33,8 @@ Override is the financial operating platform for Broadway producers—from model
 - Node.js 20+
 - npm
 - Firebase CLI (`npm install -g firebase-tools`)
+- Google Cloud SDK (`gcloud`) for deploy-auth bootstrap / ADC refresh
+- 1Password desktop app + 1Password CLI (`op`) for deployers
 
 ### Setup
 
@@ -78,8 +80,8 @@ Open [http://localhost:3000](http://localhost:3000).
 | `npm run dev` | Start development server |
 | `npm run build` | Static export to `out/` (includes prebuild/postbuild scripts) |
 | `npm run lint` | Run ESLint |
-| `firebase deploy` | Deploy hosting + Firestore rules + Storage rules |
-| `firebase deploy --only hosting` | Deploy hosting only |
+| `npm run deploy` | Deploy hosting + Firestore rules + Storage rules via 1Password auth |
+| `npm run deploy:hosting` | Deploy hosting only via 1Password auth |
 
 ## Project Structure
 
@@ -116,6 +118,13 @@ src/
 - Keep browser-key restrictions enabled in Google Cloud Credentials.
 - If a browser key is exposed: remove it from source/history, create a replacement key with the same referrer/API restrictions, update `.env.local`, redeploy, verify the live site uses the new key, then delete the old key.
 - If the deploy credential stored in `Private/GCP ADC` is exposed, renew it, overwrite the 1Password item, and revoke the old credential.
+
+## 1Password Deploy & Secret Flow
+
+- First-time setup for deploy maintainers: `op-firebase-setup soyouthinkyouwant`
+- Day-to-day deploys: `npm run deploy` or `npm run deploy:hosting`
+- `op-firebase-deploy` reads `Private/Firebase Deploy - soyouthinkyouwant` first, then falls back to `Private/GCP ADC`
+- Future APIs or services should use committed template files with `op://Private/<item>/<field>` references and `op inject` into gitignored runtime files during deploy
 
 ## License
 

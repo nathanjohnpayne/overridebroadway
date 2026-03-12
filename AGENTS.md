@@ -865,6 +865,10 @@ op-firebase-deploy --only firestore:rules   # Any target combo
 
 All deploys use `op-firebase-deploy` (global script on PATH) for non-interactive 1Password auth. No `firebase login` or browser prompts needed. The script reads ADC credentials from 1Password (`Private/GCP ADC`), auto-detects the project from `.firebaserc`, and cleans up credentials on exit.
 
+`op-firebase-deploy` checks `Private/Firebase Deploy - soyouthinkyouwant` first, then falls back to `Private/GCP ADC`.
+
+**First-time setup:** `op-firebase-setup soyouthinkyouwant` creates `firebase-deployer@soyouthinkyouwant.iam.gserviceaccount.com`, grants deploy roles, and stores the key in 1Password.
+
 **Token renewal:** The ADC refresh token has no fixed expiry but is revoked on Google password change, explicit revocation, or 6 months of inactivity. If deploys fail with `invalid_grant`, renew:
 
 ```bash
@@ -905,6 +909,7 @@ Get these from: Firebase Console → Project Settings → Your Apps → Web App 
 - Keep browser-key restrictions enabled in Google Cloud Credentials.
 - If a browser key is exposed: remove it from tracked files/history, create a replacement key with the same referrer/API restrictions, update `.env.local`, redeploy, verify the live site uses the new key, then delete the old key.
 - If deploy auth in `Private/GCP ADC` is exposed, renew the ADC credential, update the 1Password item, and revoke the old credential.
+- For future APIs or services, commit only `*.tpl` files with `op://Private/<item>/<field>` references and resolve them into gitignored runtime files with `op inject`.
 
 ## Firebase Project
 
