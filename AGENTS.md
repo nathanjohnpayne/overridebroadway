@@ -898,6 +898,14 @@ NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID=
 
 Get these from: Firebase Console → Project Settings → Your Apps → Web App config.
 
+### Credential Hygiene And Rotation
+
+- Keep real `NEXT_PUBLIC_FIREBASE_*` values only in `.env.local`. Do not hardcode live keys in tracked source or docs.
+- `NEXT_PUBLIC_FIREBASE_API_KEY` is a browser key, not the auth boundary, but committing it to source is still a security concern because public exposure triggers abuse alerts and quota noise.
+- Keep browser-key restrictions enabled in Google Cloud Credentials.
+- If a browser key is exposed: remove it from tracked files/history, create a replacement key with the same referrer/API restrictions, update `.env.local`, redeploy, verify the live site uses the new key, then delete the old key.
+- If deploy auth in `Private/GCP ADC` is exposed, renew the ADC credential, update the 1Password item, and revoke the old credential.
+
 ## Firebase Project
 
 - **Project ID**: soyouthinkyouwant

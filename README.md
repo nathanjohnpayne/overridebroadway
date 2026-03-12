@@ -109,6 +109,14 @@ src/
 - **Auth providers**: Email/Password, Google
 - **Custom domain**: overridebroadway.com
 
+## Credential Hygiene & Rotation
+
+- Keep real `NEXT_PUBLIC_FIREBASE_*` values in `.env.local`, not in tracked source.
+- The Firebase Web API key is not the auth boundary, but checking it into source is still a security concern because public exposure triggers Google abuse alerts and noisy quota usage.
+- Keep browser-key restrictions enabled in Google Cloud Credentials.
+- If a browser key is exposed: remove it from source/history, create a replacement key with the same referrer/API restrictions, update `.env.local`, redeploy, verify the live site uses the new key, then delete the old key.
+- If the deploy credential stored in `Private/GCP ADC` is exposed, renew it, overwrite the 1Password item, and revoke the old credential.
+
 ## License
 
 Private—All rights reserved.
