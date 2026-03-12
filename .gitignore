@@ -42,3 +42,9 @@ next-env.d.ts
 
 # firebase
 .firebase/
+
+# Public repo hygiene
+*.key
+service-account.json
+firebase-adminsdk*.json
+RIPCUT_GUIDE.md
