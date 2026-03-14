@@ -1,12 +1,14 @@
 # Deployment
 
+> This guide covers deploying the existing project. For **new project setup** (create Firebase project, `firebase init`, first-time credential setup), see `ai_agent_repo_template/DEPLOYMENT.md` in the sibling directory.
+
 ## Prerequisites
 
 - [Firebase CLI](https://firebase.google.com/docs/cli) (`firebase-tools`) installed globally
 - [1Password CLI](https://developer.1password.com/docs/cli/) (`op`) installed and signed in
 - Google Cloud SDK (`gcloud`) installed
 - `op-firebase-deploy` script on PATH (see First-Time Setup below)
-- Access to the `Private` vault in 1Password: `Private/Firebase Deploy - soyouthinkyouwant` and `Private/GCP ADC`
+- Access to the `Private` vault in 1Password: `Private/Firebase Deploy - soyouthinkyouwant`
 
 ## Environments
 
@@ -21,8 +23,8 @@ There is no staging environment. All deploys go directly to production.
 This is a Next.js app with `output: 'export'` (static export). The build must complete before deploy.
 
 ```bash
-# Source environment variables first
-cp .env.local.example .env.local  # first time; fill in real values
+# Create .env.local first (see README.md for the required NEXT_PUBLIC_FIREBASE_* values)
+# Then source environment variables first
 # (or export NEXT_PUBLIC_FIREBASE_* vars)
 
 # Production build (static export → out/)
@@ -52,7 +54,7 @@ op-firebase-deploy --only firestore:rules
 ```
 
 The script:
-1. Reads the service account key from 1Password (`Private/Firebase Deploy - soyouthinkyouwant`), falling back to `Private/GCP ADC`
+1. Reads the service account key from 1Password (`Private/Firebase Deploy - soyouthinkyouwant`)
 2. Auto-detects the Firebase project from `.firebaserc`
 3. Runs `firebase deploy --non-interactive`
 4. Cleans up credentials on exit
@@ -66,16 +68,6 @@ op-firebase-setup soyouthinkyouwant
 ```
 
 Creates `firebase-deployer@soyouthinkyouwant.iam.gserviceaccount.com`, grants deploy roles, generates a key, and stores it in 1Password as `Firebase Deploy - soyouthinkyouwant`. Run once per machine.
-
-## Token Renewal
-
-The ADC refresh token has no fixed expiry but is revoked on Google password change, explicit revocation, or 6 months of inactivity. If deploys fail with `invalid_grant`:
-
-```bash
-gcloud auth application-default login --project=soyouthinkyouwant
-op item edit "GCP ADC" --vault Private \
-  "credential=$(cat ~/.config/gcloud/application_default_credentials.json)"
-```
 
 ## Rollback Procedure
 
@@ -119,12 +111,6 @@ If a browser API key is exposed:
 3. Create a replacement browser key in Google Cloud Credentials with the same restrictions (HTTP referrers: `overridebroadway.com`, `localhost`, Firebase API allowlist)
 4. Update local `.env.local`, rebuild and redeploy
 5. Verify the live bundle serves the new key only, then delete the old key
-
-If the deploy ADC credential (`Private/GCP ADC`) goes stale:
-```bash
-gcloud auth application-default login --project=soyouthinkyouwant
-# Then update the 1Password item
-```
 
 For future services requiring secrets, commit only template files with `op://` references and resolve them with `op inject` into a gitignored runtime file at deploy time. Never commit the resolved output.
 

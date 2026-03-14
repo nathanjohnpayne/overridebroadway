@@ -117,13 +117,13 @@ src/
 - The Firebase Web API key is not the auth boundary, but checking it into source is still a security concern because public exposure triggers Google abuse alerts and noisy quota usage.
 - Keep browser-key restrictions enabled in Google Cloud Credentials.
 - If a browser key is exposed: remove it from source/history, create a replacement key with the same referrer/API restrictions, update `.env.local`, redeploy, verify the live site uses the new key, then delete the old key.
-- If the deploy credential stored in `Private/GCP ADC` is exposed, renew it, overwrite the 1Password item, and revoke the old credential.
+- If the deploy service account key (`Private/Firebase Deploy - soyouthinkyouwant`) is compromised, rotate it with `op-firebase-setup soyouthinkyouwant`.
 
 ## 1Password Deploy & Secret Flow
 
 - First-time setup for deploy maintainers: `op-firebase-setup soyouthinkyouwant`
 - Day-to-day deploys: `npm run deploy` or `npm run deploy:hosting`
-- `op-firebase-deploy` reads `Private/Firebase Deploy - soyouthinkyouwant` first, then falls back to `Private/GCP ADC`
+- `op-firebase-deploy` reads `Private/Firebase Deploy - soyouthinkyouwant` from 1Password and sets `GOOGLE_APPLICATION_CREDENTIALS`. No browser auth required.
 - Future APIs or services should use committed template files with `op://Private/<item>/<field>` references and `op inject` into gitignored runtime files during deploy
 
 ## License
