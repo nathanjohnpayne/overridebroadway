@@ -441,7 +441,6 @@ npm run deploy:hosting
 
 **First-time setup:**
 ```bash
-gcloud auth application-default login
 op-firebase-setup soyouthinkyouwant
 ```
 

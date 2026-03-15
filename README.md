@@ -116,13 +116,13 @@ src/
 - The Firebase Web API key is not the auth boundary, but checking it into source is still a security concern because public exposure triggers Google abuse alerts and noisy quota usage.
 - Keep browser-key restrictions enabled in Google Cloud Credentials.
 - If a browser key is exposed: remove it from source/history, create a replacement key with the same referrer/API restrictions, update `.env.local`, redeploy, verify the live site uses the new key, then delete the old key.
-- Deploy auth uses short-lived impersonated credentials. If local auth stops working, rerun `gcloud auth application-default login`; if IAM bindings drift, rerun `op-firebase-setup soyouthinkyouwant`.
+- Deploy auth uses short-lived impersonated credentials. Routine deploys should use the shared `Private/GCP ADC` source credential through the 1Password CLI without browser login; if that credential itself needs rotation, refresh it once and update the item; if IAM bindings drift, rerun `op-firebase-setup soyouthinkyouwant`.
 
 ## Deploy Auth & Future Secret Flow
 
-- First-time setup for deploy maintainers: `gcloud auth application-default login` then `op-firebase-setup soyouthinkyouwant`
+- First-time setup for deploy maintainers: make sure the 1Password CLI can read `Private/GCP ADC`, then run `op-firebase-setup soyouthinkyouwant`
 - Day-to-day deploys: `npm run deploy` or `npm run deploy:hosting`
-- `op-firebase-deploy` keeps the old name for compatibility, but it now creates a short-lived impersonated credential for `firebase-deployer@soyouthinkyouwant.iam.gserviceaccount.com` from local ADC.
+- `op-firebase-deploy` keeps the old name for compatibility, but it now creates a short-lived impersonated credential for `firebase-deployer@soyouthinkyouwant.iam.gserviceaccount.com` from a 1Password-backed GCP ADC source credential or another explicit `GOOGLE_APPLICATION_CREDENTIALS` file.
 - Future APIs or services should use committed template files with `op://Private/<item>/<field>` references and `op inject` into gitignored runtime files during deploy
 
 ## License
