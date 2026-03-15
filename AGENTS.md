@@ -22,7 +22,7 @@ Override is the financial operating platform for Broadway producers — from mod
 npm run dev              # Local development server (http://localhost:3000)
 npm run build            # Static export → out/ (runs prebuild + postbuild scripts)
 npm run lint             # ESLint (flat config)
-npm run deploy           # Full deploy (hosting + rules + storage) via 1Password auth
+npm run deploy           # Full deploy (hosting + rules + storage) via keyless impersonation
 npm run deploy:hosting   # Hosting only
 op-firebase-deploy --only firestore:rules   # Any target combo
 ```
@@ -429,7 +429,7 @@ scripts/ci/check_duplicate_docs
 
 See `DEPLOYMENT.md` for full instructions.
 
-Deploy requires `firebase-tools`, Google Cloud SDK (`gcloud`), the 1Password CLI (`op`), and access to the `Private` vault in 1Password.
+Deploy requires `firebase-tools`, Google Cloud SDK (`gcloud`), the local `gcloud` wrapper, and access to impersonate `firebase-deployer@soyouthinkyouwant.iam.gserviceaccount.com`.
 
 ```bash
 # Full deploy (hosting + Firestore rules + Storage rules)
@@ -441,6 +441,7 @@ npm run deploy:hosting
 
 **First-time setup:**
 ```bash
+gcloud auth application-default login
 op-firebase-setup soyouthinkyouwant
 ```
 
