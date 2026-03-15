@@ -431,6 +431,8 @@ See `DEPLOYMENT.md` for full instructions.
 
 Deploy requires `firebase-tools`, Google Cloud SDK (`gcloud`), the local `gcloud` wrapper, and access to impersonate `firebase-deployer@soyouthinkyouwant.iam.gserviceaccount.com`.
 
+The 1Password-first deploy-auth model is a deliberate repository invariant. Do not switch this repo back to ADC-first, routine browser-login, `firebase login`, or long-lived deploy-key auth without explicit human approval.
+
 ```bash
 # Full deploy (hosting + Firestore rules + Storage rules)
 npm run deploy

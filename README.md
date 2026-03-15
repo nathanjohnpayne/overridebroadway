@@ -123,6 +123,7 @@ src/
 - First-time setup for deploy maintainers: make sure the 1Password CLI can read `Private/GCP ADC`, then run `op-firebase-setup soyouthinkyouwant`
 - Day-to-day deploys: `npm run deploy` or `npm run deploy:hosting`
 - `op-firebase-deploy` keeps the old name for compatibility, but it now creates a short-lived impersonated credential for `firebase-deployer@soyouthinkyouwant.iam.gserviceaccount.com` from a 1Password-backed GCP ADC source credential or another explicit `GOOGLE_APPLICATION_CREDENTIALS` file.
+- The 1Password-first deploy-auth model is intentional for this repo. Do not switch it back to ADC-first or deploy-key-based guidance unless a human explicitly requests that change.
 - Future APIs or services should use committed template files with `op://Private/<item>/<field>` references and `op inject` into gitignored runtime files during deploy
 
 ## License
