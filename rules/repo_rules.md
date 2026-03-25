@@ -66,4 +66,4 @@ The following checks are implemented in `scripts/ci/` and must pass before any c
 4. `check_dist_not_modified` — Verifies out/ files were not directly modified (checks `out/`, not `dist/`)
 5. `check_spec_test_alignment` — Advisory: verifies specs/ files have corresponding test coverage (advisory for this repo)
 6. `check_duplicate_docs` — Verifies no documentation topic is duplicated between root files and tool folders
-7. `check_review_policy_exists` — Verifies .github/review-policy.yml and REVIEW_POLICY.md both exist
+7. `check_review_policy_exists` (inline in repo_lint.yml) — Verifies .github/review-policy.yml and REVIEW_POLICY.md both exist
