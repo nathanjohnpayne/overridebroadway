@@ -216,8 +216,8 @@ Storage:
 ### Deployment
 
 ```bash
-firebase deploy                    # Full deploy (hosting + Firestore rules + Storage rules)
-firebase deploy --only hosting     # Hosting only
+op-firebase-deploy                 # Full deploy (hosting + Firestore rules + Storage rules)
+op-firebase-deploy --only hosting  # Hosting only
 ```
 
 Firebase Hosting serves from `out/` with:
