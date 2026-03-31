@@ -24,10 +24,14 @@ export function useProducerPools(
   useEffect(() => {
     if (!productionId || !ownerUserId || bootstrapped.current) return;
     bootstrapped.current = true;
-    ensureDefaultPool(productionId, ownerUserId).then((poolId) => {
-      setDefaultPoolId(poolId);
-      return assignInvestorsToDefaultPool(productionId, poolId);
-    });
+    ensureDefaultPool(productionId, ownerUserId)
+      .then((poolId) => {
+        setDefaultPoolId(poolId);
+        return assignInvestorsToDefaultPool(productionId, poolId);
+      })
+      .catch((err) => {
+        console.error("Producer pool bootstrap failed:", err);
+      });
   }, [productionId, ownerUserId]);
 
   // Real-time subscription to pools
