@@ -399,9 +399,10 @@ export default function ProductionHubClient() {
     if (!user) return;
     const TIMEOUT_MS = 15_000;
     let cancelled = false;
-    const timeout = new Promise<null>((_, reject) =>
-      setTimeout(() => reject(new Error("timeout")), TIMEOUT_MS)
-    );
+    let timerId: ReturnType<typeof setTimeout>;
+    const timeout = new Promise<null>((_, reject) => {
+      timerId = setTimeout(() => reject(new Error("timeout")), TIMEOUT_MS);
+    });
     Promise.race([getProduction(id), timeout])
       .then((prod) => {
         if (cancelled) return;
@@ -417,7 +418,7 @@ export default function ProductionHubClient() {
         toast.error(msg);
         router.push("/dashboard");
       });
-    return () => { cancelled = true; };
+    return () => { cancelled = true; clearTimeout(timerId); };
   }, [id, user, router]);
 
   // Load deal inputs into form
