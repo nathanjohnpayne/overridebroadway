@@ -135,7 +135,7 @@ If both machines modified the same 1Password item:
 - [1Password CLI](https://developer.1password.com/docs/cli/) (`op`) installed and signed in
 - Local `gcloud` wrapper installed on PATH (see First-Time Setup below)
 - `op-firebase-deploy` and `op-firebase-setup` on PATH
-- Access to the shared 1Password source credential `op://Private/c2v6emkwppjzjjaq2bdqk3wnlm/credential` or another explicit `GOOGLE_APPLICATION_CREDENTIALS` file
+- Access to the project SA key in `op://Firebase/soyouthinkyouwant — Firebase Deployer SA Key` (preferred for CI/headless) or the shared 1Password source credential `op://Private/c2v6emkwppjzjjaq2bdqk3wnlm/credential` or another explicit `GOOGLE_APPLICATION_CREDENTIALS` file
 - Permission to impersonate `firebase-deployer@soyouthinkyouwant.iam.gserviceaccount.com`
 
 ## Machine User Setup (New Project)
@@ -358,8 +358,8 @@ op-firebase-deploy --only firestore:rules
 
 The script:
 1. Auto-detects the Firebase project from `.firebaserc`
-2. Reads source credentials from `GOOGLE_APPLICATION_CREDENTIALS`, then `op://Private/c2v6emkwppjzjjaq2bdqk3wnlm/credential`, then `~/.config/gcloud/application_default_credentials.json`
-3. Generates a temporary `impersonated_service_account` credential file for `firebase-deployer@soyouthinkyouwant.iam.gserviceaccount.com`
+2. Reads source credentials in order: `GOOGLE_APPLICATION_CREDENTIALS`, then the project SA key from `op://Firebase/soyouthinkyouwant — Firebase Deployer SA Key`, then `op://Private/c2v6emkwppjzjjaq2bdqk3wnlm/credential`, then `~/.config/gcloud/application_default_credentials.json`
+3. If the source credential is the `firebase-deployer@soyouthinkyouwant.iam.gserviceaccount.com` service account key, uses it directly (no impersonation, faster). Otherwise generates a temporary `impersonated_service_account` credential file for `firebase-deployer@soyouthinkyouwant.iam.gserviceaccount.com`
 4. Sets `GOOGLE_APPLICATION_CREDENTIALS` to that temp file and runs `firebase deploy --non-interactive`
 5. Cleans up credentials on exit
 
@@ -427,6 +427,33 @@ Deploys are manual via `op-firebase-deploy`. CI workflows (repo linting, review 
 
 When connecting CI, prefer Workload Identity Federation or another `external_account` credential as the source credential. If CI already exposes `GOOGLE_APPLICATION_CREDENTIALS` pointing at an `external_account` file, `op-firebase-deploy` can reuse it to impersonate the deployer service account.
 
+### CI/CD & Headless Deploy
+
+For headless environments (Claude Code cloud tasks, GitHub Actions, etc.) where
+1Password biometric auth is unavailable, use the project SA key directly:
+
+```bash
+# Pull the SA key from 1Password (one-time, requires biometric)
+op document get "soyouthinkyouwant — Firebase Deployer SA Key" \
+  --vault Firebase --out-file ~/firebase-keys/soyouthinkyouwant-sa-key.json
+
+# Deploy with the SA key
+GOOGLE_APPLICATION_CREDENTIALS=~/firebase-keys/soyouthinkyouwant-sa-key.json npm run deploy
+```
+
+Because this SA key matches `firebase-deployer@soyouthinkyouwant.iam.gserviceaccount.com`,
+`op-firebase-deploy` skips impersonation and uses the key directly (faster).
+
+For Claude Code cloud scheduled tasks:
+1. Retrieve the key: `op document get "soyouthinkyouwant — Firebase Deployer SA Key" --vault Firebase`
+2. Copy the JSON contents
+3. In the task's cloud environment, add: `FIREBASE_SA_KEY=<paste JSON>`
+4. Add a setup script:
+   ```bash
+   echo "$FIREBASE_SA_KEY" > /tmp/sa-key.json
+   export GOOGLE_APPLICATION_CREDENTIALS=/tmp/sa-key.json
+   ```
+
 ## Secrets Management
 
 - Real Firebase web config (`NEXT_PUBLIC_FIREBASE_*`) is stored only in local `.env.local` files (gitignored). Never hardcode live values in `src/lib/firebase.ts`, documentation, or committed config.
@@ -446,7 +473,9 @@ For future services requiring secrets, commit only template files with `op://` r
 
 ## Auth Maintenance
 
-If day-to-day auth stops working, first make sure the 1Password CLI is signed in and `op://Private/c2v6emkwppjzjjaq2bdqk3wnlm/credential` is readable.
+For interactive (biometric) machines, verify the 1Password CLI is signed in and `op://Private/c2v6emkwppjzjjaq2bdqk3wnlm/credential` is readable. The script also checks the Firebase vault SA key at `op://Firebase/soyouthinkyouwant — Firebase Deployer SA Key` before falling back to the shared ADC.
+
+For headless environments, the Firebase vault SA key (`op://Firebase/4qdvazbu2ks73cq5fnvqifb5fq`) is the primary credential source. Export it as `GOOGLE_APPLICATION_CREDENTIALS` (see CI/CD & Headless Deploy above).
 
 If deploy impersonation breaks because IAM bindings or `gcloud` config drifted, rerun:
 
