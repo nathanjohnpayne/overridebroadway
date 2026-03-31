@@ -135,7 +135,7 @@ If both machines modified the same 1Password item:
 - [1Password CLI](https://developer.1password.com/docs/cli/) (`op`) installed and signed in
 - Local `gcloud` wrapper installed on PATH (see First-Time Setup below)
 - `op-firebase-deploy` and `op-firebase-setup` on PATH
-- Access to the shared 1Password source credential `op://Private/GCP ADC/credential` or another explicit `GOOGLE_APPLICATION_CREDENTIALS` file
+- Access to the shared 1Password source credential `op://Private/c2v6emkwppjzjjaq2bdqk3wnlm/credential` or another explicit `GOOGLE_APPLICATION_CREDENTIALS` file
 - Permission to impersonate `firebase-deployer@soyouthinkyouwant.iam.gserviceaccount.com`
 
 ## Machine User Setup (New Project)
@@ -358,12 +358,12 @@ op-firebase-deploy --only firestore:rules
 
 The script:
 1. Auto-detects the Firebase project from `.firebaserc`
-2. Reads source credentials from `GOOGLE_APPLICATION_CREDENTIALS`, then `op://Private/GCP ADC/credential`, then `~/.config/gcloud/application_default_credentials.json`
+2. Reads source credentials from `GOOGLE_APPLICATION_CREDENTIALS`, then `op://Private/c2v6emkwppjzjjaq2bdqk3wnlm/credential`, then `~/.config/gcloud/application_default_credentials.json`
 3. Generates a temporary `impersonated_service_account` credential file for `firebase-deployer@soyouthinkyouwant.iam.gserviceaccount.com`
 4. Sets `GOOGLE_APPLICATION_CREDENTIALS` to that temp file and runs `firebase deploy --non-interactive`
 5. Cleans up credentials on exit
 
-No browser prompt is needed for routine use once `op://Private/GCP ADC/credential` exists and the 1Password CLI is unlocked.
+No browser prompt is needed for routine use once `op://Private/c2v6emkwppjzjjaq2bdqk3wnlm/credential` exists and the 1Password CLI is unlocked.
 
 This 1Password-first source-credential model is a deliberate project decision. Do not replace it with ADC-first day-to-day docs, routine browser-login steps, `firebase login`, or long-lived deploy keys unless a human explicitly asks for that change.
 
@@ -388,7 +388,7 @@ Then bootstrap project impersonation:
 op-firebase-setup soyouthinkyouwant
 ```
 
-If `op://Private/GCP ADC/credential` does not exist yet, seed it once by running `gcloud auth application-default login`, then copy the resulting `~/.config/gcloud/application_default_credentials.json` into the 1Password item `Private/GCP ADC`, field `credential`.
+If `op://Private/c2v6emkwppjzjjaq2bdqk3wnlm/credential` does not exist yet, seed it once by running `gcloud auth application-default login`, then copy the resulting `~/.config/gcloud/application_default_credentials.json` into the 1Password item `Private/GCP ADC`, field `credential`.
 
 `op-firebase-setup` is the legacy script name, but it now performs keyless setup. For this project it:
 1. Enables the IAM Credentials API
@@ -446,7 +446,7 @@ For future services requiring secrets, commit only template files with `op://` r
 
 ## Auth Maintenance
 
-If day-to-day auth stops working, first make sure the 1Password CLI is signed in and `op://Private/GCP ADC/credential` is readable.
+If day-to-day auth stops working, first make sure the 1Password CLI is signed in and `op://Private/c2v6emkwppjzjjaq2bdqk3wnlm/credential` is readable.
 
 If deploy impersonation breaks because IAM bindings or `gcloud` config drifted, rerun:
 
