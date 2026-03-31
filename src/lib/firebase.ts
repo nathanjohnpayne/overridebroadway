@@ -1,6 +1,6 @@
 import { initializeApp, getApps, getApp } from "firebase/app";
 import { getAuth, GoogleAuthProvider, browserLocalPersistence, setPersistence } from "firebase/auth";
-import { getFirestore } from "firebase/firestore";
+import { initializeFirestore, getFirestore } from "firebase/firestore";
 import { getStorage } from "firebase/storage";
 import { getAnalytics, isSupported } from "firebase/analytics";
 
@@ -26,7 +26,21 @@ const app =
       : initializeApp({ ...firebaseConfig, apiKey: firebaseConfig.apiKey ?? "placeholder" });
 
 export const auth = getAuth(app);
-export const db = getFirestore(app);
+// Use initializeFirestore with experimentalAutoDetectLongPolling to avoid
+// WebSocket transport failures in Safari (which cause 503s and 30-60s stalls
+// while the SDK retries with exponential backoff). This auto-falls-back to
+// HTTP long-polling when WebSockets are unreliable.
+// initializeFirestore throws if already called for this app (e.g. HMR), so
+// fall back to getFirestore which returns the existing instance.
+function createFirestore() {
+  if (typeof window === "undefined") return getFirestore(app);
+  try {
+    return initializeFirestore(app, { experimentalAutoDetectLongPolling: true });
+  } catch {
+    return getFirestore(app);
+  }
+}
+export const db = createFirestore();
 export const storage = getStorage(app);
 export const googleProvider = new GoogleAuthProvider();
 

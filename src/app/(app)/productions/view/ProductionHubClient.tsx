@@ -392,14 +392,33 @@ export default function ProductionHubClient() {
     defaultValues: DEFAULT_DEAL_INPUTS,
   });
 
-  // Load production
+  // Load production with timeout and error handling.
+  // Firestore can stall for 30-60s when the WebSocket channel drops (Safari 503s).
+  // A 15s timeout surfaces the problem to the user instead of showing skeletons forever.
   useEffect(() => {
     if (!user) return;
-    getProduction(id).then(prod => {
-      if (!prod || prod.userId !== user.uid) { router.push("/dashboard"); return; }
-      setProduction(prod);
-      setProdLoading(false);
+    const TIMEOUT_MS = 15_000;
+    let cancelled = false;
+    let timerId: ReturnType<typeof setTimeout>;
+    const timeout = new Promise<null>((_, reject) => {
+      timerId = setTimeout(() => reject(new Error("timeout")), TIMEOUT_MS);
     });
+    Promise.race([getProduction(id), timeout])
+      .then((prod) => {
+        if (cancelled) return;
+        if (!prod || prod.userId !== user.uid) { router.push("/dashboard"); return; }
+        setProduction(prod);
+        setProdLoading(false);
+      })
+      .catch((err) => {
+        if (cancelled) return;
+        const msg = err?.message === "timeout"
+          ? "Loading timed out — please try again"
+          : "Failed to load production";
+        toast.error(msg);
+        router.push("/dashboard");
+      });
+    return () => { cancelled = true; clearTimeout(timerId); };
   }, [id, user, router]);
 
   // Load deal inputs into form
