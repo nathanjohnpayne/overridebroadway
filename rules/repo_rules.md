@@ -31,6 +31,7 @@ The following tool config directory must contain only configuration:
 
 ## Forbidden Patterns
 
+- **Never push directly to `main`.** All changes must go through a pull request—even single-line fixes, documentation updates, and deploy config changes. The only exception is if the human explicitly authorizes a direct push in chat as a break-glass override.
 - **Never edit `out/` directly.** It is a Next.js static export artifact. Always run `npm run build` to regenerate.
 - **Never commit secrets.** Firebase web config (`NEXT_PUBLIC_FIREBASE_*`), service account keys, and ADC credentials must never be committed. Use `.env.local` files (gitignored) for local config.
 - **No instruction files in tool folders.** `.claude/` and `.cursor/` must not contain plain `.md` or `.txt` instruction files. `.cursor/rules/*.mdc` is permitted (Cursor rules format, not instruction prose).
