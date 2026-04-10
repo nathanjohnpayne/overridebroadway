@@ -1,0 +1,66 @@
+# .coderabbit.yml — CodeRabbit configuration
+# See https://docs.coderabbit.ai/configuration
+
+language: en-US
+
+tone_instructions: >-
+  Focus on bugs, security issues, and correctness over style nitpicks.
+  Flag any hardcoded credentials, exposed API keys, or Firebase security
+  rule gaps. Keep comments actionable and concise.
+
+reviews:
+  auto_review:
+    enabled: true
+    drafts: false
+    base_branches:
+      - main
+
+  profile: assertive
+  request_changes_workflow: false
+
+  high_level_summary: true
+  high_level_summary_placeholder: "@coderabbitai summary"
+  high_level_summary_in_walkthrough: true
+  collapse_walkthrough: true
+  poem: false
+
+  related_issues: true
+  related_prs: true
+  assess_linked_issues: true
+  estimate_code_review_effort: true
+
+  path_instructions:
+    - path: "src/lib/model/**"
+      instructions: >-
+        Financial modeling engine. Verify arithmetic correctness in
+        revenue projections, recoupment calculations, and profit
+        splits. Rounding errors in currency math are critical bugs.
+        Ensure calculation outputs are deterministic.
+    - path: "src/stores/**"
+      instructions: >-
+        Zustand state stores. Review for proper immutable updates,
+        that derived state stays consistent, and that store actions
+        don't trigger unnecessary re-renders.
+    - path: "src/app/**"
+      instructions: >-
+        Next.js App Router pages. Verify correct use of server vs
+        client components ('use client' directives), proper data
+        fetching patterns, and that auth guards are applied to
+        protected routes.
+    - path: "src/components/deal/**"
+      instructions: >-
+        Deal-room components display financial terms and negotiation
+        state. Verify currency/percentage formatting and that
+        sensitive deal data is not leaked to unauthorized views.
+    - path: "src/components/scenarios/**"
+      instructions: >-
+        Scenario modeling UI. Ensure inputs are validated (no
+        negative percentages, amounts within bounds) and that
+        scenario comparisons calculate correctly.
+
+chat:
+  auto_reply: true
+
+knowledge_base:
+  learnings:
+    scope: auto
