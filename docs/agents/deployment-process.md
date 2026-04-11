@@ -6,6 +6,10 @@ Deploy requires `firebase-tools`, Google Cloud SDK (`gcloud`), the local `gcloud
 
 The 1Password-first deploy-auth model is a deliberate repository invariant. Do not switch this repo back to ADC-first, routine browser-login, `firebase login`, or long-lived deploy-key auth without explicit human approval.
 
+- If credential preflight was run at session start (`scripts/op-preflight.sh --mode all`),
+  deploy credentials are already cached in `GOOGLE_APPLICATION_CREDENTIALS`. No additional
+  biometric prompt is needed for deployment.
+
 If an `op` command fails with a sign-in or biometric error during deploy, follow the pause-and-prompt procedure in [operating-rules.md](operating-rules.md#1password-cli-authentication-failures). Do not retry or work around the failure without the human present.
 
 ```bash
