@@ -56,3 +56,17 @@ RIPCUT_GUIDE.md
 
 # Build artifacts (auto-generated; regenerated on every local build)
 .build_id
+
+# AI / agents (local state and runtime artifacts)
+.claude/worktrees/
+.cursor/cache/
+.cursor/state/
+.cursor/plans/
+
+# Playwright
+test-results/
+playwright-report/
+
+# Misc
+tmp/
+.cache/
