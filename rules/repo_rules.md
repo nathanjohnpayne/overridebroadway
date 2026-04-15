@@ -68,3 +68,4 @@ The following checks are implemented in `scripts/ci/` and must pass before any c
 5. `check_spec_test_alignment` — Advisory: verifies specs/ files have corresponding test coverage (advisory for this repo)
 6. `check_duplicate_docs` — Verifies no documentation topic is duplicated between root files and tool folders
 7. `check_review_policy_exists` (inline in repo_lint.yml) — Verifies .github/review-policy.yml and REVIEW_POLICY.md both exist
+8. `check_codex_scripts` — Verifies `scripts/codex-review-request.sh` and `scripts/codex-review-check.sh` exist and are executable. Required for Phase 4a automated external review.
