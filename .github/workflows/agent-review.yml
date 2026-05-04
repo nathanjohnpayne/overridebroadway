@@ -90,13 +90,6 @@ jobs:
   # ──────────────────────────────────────────────
   triage:
     needs: [load-config]
-    # Dependabot PRs run with an isolated secrets namespace where
-    # REVIEWER_ASSIGNMENT_TOKEN is unavailable, causing
-    # actions/github-script@v9 to fail with "Input required and not
-    # supplied: github-token". External-review labeling for any PR
-    # (including Dependabot) is also performed by
-    # pr-review-policy.yml's external-review-labeling job using the
-    # default GITHUB_TOKEN, so skipping here loses no coverage.
     if: >
       github.event_name == 'pull_request' &&
       github.event.pull_request.user.login != 'dependabot[bot]' &&
@@ -173,10 +166,6 @@ jobs:
   # ──────────────────────────────────────────────
   assign:
     needs: [load-config, triage]
-    # Skip Dependabot PRs: REVIEWER_ASSIGNMENT_TOKEN is unavailable in
-    # the Dependabot secrets context, and the body of the script
-    # short-circuits for non-author-identity authors anyway. See triage
-    # job above for the github-token failure mode.
     if: >
       always() &&
       github.event_name == 'pull_request' &&
