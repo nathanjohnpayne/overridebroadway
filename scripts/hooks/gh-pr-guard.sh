@@ -127,7 +127,23 @@ COMMAND=$(echo "$INPUT" | jq -r '.tool_input.command // empty')
 # middle of an unrelated command are caught downstream by the token
 # walk, which exits 0 if no `gh pr (create|merge)` subcommand is
 # present.
-if ! echo "$COMMAND" | grep -qE '(^|\s)gh(\s|$)'; then
+#
+# Also accept path-qualified invocations (`/usr/bin/gh`, `./gh`,
+# `bin/gh`) so an agent cannot bypass the hook by spelling the
+# command with a leading path. nathanpayne-codex caught this on
+# PR #28 — the round-5 regex `(^|\s)gh(\s|$)` rejected `/usr/bin/gh
+# pr merge 123` because the slash before `gh` isn't whitespace.
+# The token walk below independently normalizes path-qualified gh
+# to its basename, so the early-exit only needs to admit anything
+# whose final path component is `gh`.
+#
+# Also accept `gh` preceded by a quote character (`"` or `'`) so
+# `eval "gh pr merge ..."` and `bash -c 'gh pr merge ...'` clear
+# the early-exit and reach the python preprocessor, which strips
+# the eval wrapper. Without this, `eval "gh ..."` would exit 0 at
+# the early check because the `gh` token is preceded by `"`, not
+# whitespace.
+if ! echo "$COMMAND" | grep -qE '(^|[[:space:]=;&|("'"'"'])(\S*/)?gh([[:space:]"'"'"']|$)'; then
   exit 0
 fi
 
@@ -218,10 +234,89 @@ def normalize_unquoted_newlines(cmd):
         i += 1
     return "".join(out)
 
+def normalize_path_qualified_gh(tok):
+    """Rewrite path-qualified gh (`/usr/bin/gh`, `./gh`, `bin/gh`) to
+    bare `gh` so the bash token walk recognizes the basename. The
+    rewrite is a no-op for tokens whose basename is not exactly `gh`
+    (no false positives on `gh-foo`, `ghost`, `/usr/bin/ghx`, or on a
+    string arg like `"/usr/bin/gh foo"` whose final segment is
+    `gh foo`, not `gh`). nathanpayne-codex caught the bypass on
+    PR #28: `/usr/bin/gh pr merge 123 --admin` skipped the hook
+    because the bare `gh` match did not recognize path-qualified
+    invocations."""
+    if "/" in tok and tok.rsplit("/", 1)[-1] == "gh":
+        return "gh"
+    return tok
+
+def expand_eval_one_level(tokens):
+    """Re-tokenize the single string argument of an `eval` /
+    `bash -c` / `sh -c` / `dash -c` prefix through shlex.split and
+    splice the result in place. Bounded to ONE pass — nested
+    `eval "eval ...gh..."` or `bash -c "bash -c \"gh ...\""` is
+    intentionally NOT re-expanded a second time. The hook fails
+    closed on nested wrappers because the inner string remains a
+    literal token, falls into the unrelated-command branch, and
+    exits 0 only if no gh-context subcommand is detected (which
+    is the correct behavior — we do not bypass the merge guard,
+    we just do not parse the deepest layer either).
+    nathanpayne-codex caught the original bypass on PR #28:
+    `eval "gh pr merge 123 --admin"` shlex-tokenized to [`eval`,
+    `gh pr merge 123 --admin`], the latter token failed the bare
+    `gh` match in the bash walk, and the hook exited 0. The
+    `bash -c "gh ..."` variant has the same shape with one extra
+    `-c` flag token."""
+    SHELL_DASH_C = {"bash", "sh", "dash", "zsh", "ash"}
+    out = []
+    i = 0
+    while i < len(tokens):
+        tok = tokens[i]
+        # `eval STR` — payload is the very next token.
+        if tok == "eval" and i + 1 < len(tokens):
+            payload = tokens[i + 1]
+            try:
+                inner = shlex.split(payload)
+            except ValueError:
+                # Malformed inner payload — leave the eval+arg pair
+                # in place so the bash walk treats it as an unrelated
+                # command (SAW_GH stays 0, hook exits 0). This is the
+                # same fail-open posture the hook uses for any other
+                # non-gh invocation; the merge guard is not bypassed.
+                out.append(tok)
+                i += 1
+                continue
+            out.extend(inner)
+            i += 2
+            continue
+        # `bash -c STR` / `sh -c STR` — payload is two tokens away.
+        # The `-c` form is the documented way to run a string as a
+        # command in POSIX shells; an agent could otherwise spell
+        # `bash -c "gh pr merge 123 --admin"` and bypass the guard.
+        if (
+            tok in SHELL_DASH_C
+            and i + 2 < len(tokens)
+            and tokens[i + 1] == "-c"
+        ):
+            payload = tokens[i + 2]
+            try:
+                inner = shlex.split(payload)
+            except ValueError:
+                out.append(tok)
+                i += 1
+                continue
+            out.extend(inner)
+            i += 3
+            continue
+        out.append(tok)
+        i += 1
+    return out
+
 try:
     cmd = sys.stdin.read()
     cmd = normalize_unquoted_newlines(cmd)
-    for tok in shlex.split(cmd):
+    tokens = shlex.split(cmd)
+    tokens = expand_eval_one_level(tokens)
+    tokens = [normalize_path_qualified_gh(t) for t in tokens]
+    for tok in tokens:
         sys.stdout.buffer.write(tok.encode("utf-8", errors="replace") + b"\x00")
 except ValueError as e:
     print(f"shlex error: {e}", file=sys.stderr)
