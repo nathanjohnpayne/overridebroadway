@@ -215,36 +215,40 @@ fi
 HEAD_COMMITTER_DATE=$(gh api "repos/$REPO/commits/$HEAD_SHA" --jq '.commit.committer.date' 2>&1) \
   || die 3 "failed to fetch commit date for $HEAD_SHA: $HEAD_COMMITTER_DATE"
 
-# HEAD freshness anchor. Two stacked guards — committer date alone is
-# unreliable:
+# HEAD freshness anchor. Computed from two signals:
 #
-#   Layer 1 (force-push): advance the anchor past any
-#     `head_ref_force_pushed` event on this PR's timeline. Closes the
-#     force-push-with-old-commit false-clear. See #140 round-2 Codex
-#     finding (P1, line 270).
+#   Layer 1 (committer date): the commit metadata's authoritative time
+#     of "this code was finalized". Authoritative when no rebase or
+#     metadata rewrite has happened post-commit; can be older than the
+#     actual push for cherry-picks, rebase --committer-date-is-author-
+#     date, or amend-from-an-old-commit. Tolerable as a baseline.
 #
-#   Layer 2 (wallclock floor): max the anchor with NOW - window.
-#     Without this, an ordinary push of a commit with an old committer
-#     date (cherry-pick, rebase with `--committer-date-is-author-date`,
-#     or a commit whose metadata was rewritten) lets CodeRabbit comments
-#     from a prior review round pass the filter and the script exits
-#     cleared/findings without waiting for a real review on the new
-#     HEAD. See #51/#52/#30/#35 round-3 Codex findings ("Anchor
-#     CodeRabbit freshness to push time", "Gate reviews against a
-#     fresh poll anchor", "Tie CodeRabbit freshness to push time",
-#     "Filter CodeRabbit state by current HEAD SHA", "Gate on review
-#     commit rather than comment timestamp").
+#   Layer 2 (force-push): advance past any `head_ref_force_pushed`
+#     event on this PR's timeline. Closes the force-push-with-old-
+#     commit false-clear. See #140 round-2 Codex finding (P1, line 270).
 #
-# The two layers compose: force-push events get exact timestamps when
-# available, and the wallclock floor bounds residual exposure for the
-# ordinary-push path where the GitHub API does not expose a reliable
-# per-push time for non-force pushes.
+# The wallclock floor (NOW - WALLCLOCK_FRESHNESS_WINDOW_SECONDS) is
+# intentionally NOT applied to HEAD_ANCHOR. Codex P2 #51 caught the
+# side-effect: an unconditional floor advance excluded valid existing
+# CodeRabbit reviews on long-lived PRs whose HEAD had been stable
+# longer than the freshness window. The script would then time out
+# instead of reusing the existing cleared review on rerun. The fix
+# decouples the two concerns: HEAD_ANCHOR governs eligibility ("is
+# this comment for the current HEAD?"), and WALLCLOCK_FLOOR_ISO is
+# used separately by the poll loop to decide whether silence has
+# gone on long enough that a proactive re-trigger is warranted
+# (see the `proactive re-trigger` logic in the poll loop below).
+# Long-lived PRs with an unchanged HEAD now stay idempotent on
+# rerun — the existing review passes HEAD_ANCHOR and is reported
+# cleared without re-triggering CodeRabbit.
 #
-# Mirrors the REACTION_THRESHOLD computation in codex-review-request.sh,
-# which uses `reaction_freshness_window_seconds` as its floor. Here the
-# knob is `coderabbit.wallclock_freshness_window_seconds` (default
-# 1800s / 30min — long enough for a typical Phase 2.5 cycle to land,
-# short enough that cross-cycle staleness is caught).
+# Trade-off: an ordinary (non-force) push of a commit with a rewritten
+# committer date is no longer caught by the wallclock floor. This case
+# was the original motivation for Layer 2 from #51/#52/#30/#35 round-3,
+# but the side-effect of breaking idempotency on long-lived PRs was
+# strictly worse than the rare metadata-rewrite case the floor was
+# protecting against. A future fix could detect ordinary pushes via
+# the GitHub events API; for now we accept the trade-off.
 HEAD_ANCHOR="$HEAD_COMMITTER_DATE"
 ANCHOR_SOURCE="HEAD committer date"
 TIMELINE_JSON=$(fetch_api_array "repos/$REPO/issues/$PR_NUMBER/timeline" "PR timeline")
@@ -257,22 +261,23 @@ if [ -n "$LATEST_FORCE_PUSH_TIME" ] && [[ "$LATEST_FORCE_PUSH_TIME" > "$HEAD_ANC
   ANCHOR_SOURCE="head_ref_force_pushed @ $LATEST_FORCE_PUSH_TIME"
 fi
 
-# Layer 2 — wallclock freshness floor.
+# Wallclock floor — computed but not applied to HEAD_ANCHOR. Used only
+# by the poll loop to decide whether a proactive @coderabbitai retry
+# is warranted when scan_latest_comment() keeps coming up empty. See
+# the floor's role in the poll loop below and the comment above for
+# why this is decoupled from the eligibility filter.
 EPOCH_NOW=$(date +%s)
 EPOCH_FLOOR=$((EPOCH_NOW - WALLCLOCK_FRESHNESS_WINDOW_SECONDS))
-if FLOOR_ISO=$(date -u -r "$EPOCH_FLOOR" +%Y-%m-%dT%H:%M:%SZ 2>/dev/null); then
+if WALLCLOCK_FLOOR_ISO=$(date -u -r "$EPOCH_FLOOR" +%Y-%m-%dT%H:%M:%SZ 2>/dev/null); then
   :
 else
-  FLOOR_ISO=$(date -u -d "@$EPOCH_FLOOR" +%Y-%m-%dT%H:%M:%SZ 2>/dev/null) \
+  WALLCLOCK_FLOOR_ISO=$(date -u -d "@$EPOCH_FLOOR" +%Y-%m-%dT%H:%M:%SZ 2>/dev/null) \
     || die 3 "could not compute wallclock freshness floor from epoch $EPOCH_FLOOR"
-fi
-if [[ "$FLOOR_ISO" > "$HEAD_ANCHOR" ]]; then
-  HEAD_ANCHOR="$FLOOR_ISO"
-  ANCHOR_SOURCE="wallclock floor (NOW - ${WALLCLOCK_FRESHNESS_WINDOW_SECONDS}s)"
 fi
 
 log "HEAD = $HEAD_SHA committed at $HEAD_COMMITTER_DATE"
 log "anchor = $HEAD_ANCHOR (source: $ANCHOR_SOURCE)"
+log "wallclock floor = $WALLCLOCK_FLOOR_ISO (NOW - ${WALLCLOCK_FRESHNESS_WINDOW_SECONDS}s)"
 log "max_wait = ${MAX_WAIT_SECONDS}s   max_rate_limit_retries = $MAX_RATE_LIMIT_RETRIES   freshness_window = ${WALLCLOCK_FRESHNESS_WINDOW_SECONDS}s"
 
 # --- state machine ----------------------------------------------------------
@@ -413,6 +418,20 @@ post_retry_trigger() {
 START_EPOCH=$(date +%s)
 RATE_LIMIT_RETRIES=0
 LAST_RATE_LIMIT_COMMENT_ID=""
+PROACTIVE_RETRIGGER_DONE=0
+
+# Threshold at which the poll loop sends a proactive @coderabbitai
+# retry comment if no CodeRabbit response has landed yet. Sized to
+# the smaller of half the wait budget and the configured wallclock
+# freshness window: gives CodeRabbit roughly the first half of the
+# budget to respond on its own before we nudge it. Used only when
+# scan_latest_comment() keeps coming up empty — never when an
+# existing eligible review is already present (preserves
+# idempotency on rerun for long-lived PRs with stable HEAD).
+PROACTIVE_RETRIGGER_THRESHOLD_SECONDS=$((MAX_WAIT_SECONDS / 2))
+if [ "$WALLCLOCK_FRESHNESS_WINDOW_SECONDS" -lt "$PROACTIVE_RETRIGGER_THRESHOLD_SECONDS" ]; then
+  PROACTIVE_RETRIGGER_THRESHOLD_SECONDS=$WALLCLOCK_FRESHNESS_WINDOW_SECONDS
+fi
 
 emit_json_and_exit() {
   local status=$1 exit_code=$2 review_json=$3 potential_issues=$4
@@ -488,6 +507,20 @@ while :; do
   LATEST=$(scan_latest_comment)
 
   if [ "$(echo "$LATEST" | jq 'length')" = "0" ]; then
+    # Proactive retry: when CodeRabbit has stayed silent past the
+    # retrigger threshold AND we haven't already nudged it once, post
+    # @coderabbitai try again. Handles the case where the webhook
+    # delivery was dropped or the bot otherwise failed to respond to
+    # the initial PR-open event. Single-fire — repeat nudges don't help
+    # and would clutter the PR conversation. The WALLCLOCK_FLOOR_ISO
+    # variable computed above is what makes this distinct from filter
+    # behavior: floor is consulted only here, not in scan_latest_comment.
+    if [ "$PROACTIVE_RETRIGGER_DONE" -eq 0 ] \
+       && [ "$ELAPSED" -ge "$PROACTIVE_RETRIGGER_THRESHOLD_SECONDS" ]; then
+      log "no CodeRabbit comment after ${ELAPSED}s (threshold ${PROACTIVE_RETRIGGER_THRESHOLD_SECONDS}s) — posting proactive retry"
+      post_retry_trigger
+      PROACTIVE_RETRIGGER_DONE=1
+    fi
     log "no CodeRabbit comment yet (elapsed ${ELAPSED}s); sleeping ${POLL_INTERVAL_SECONDS}s"
     sleep_or_timeout "$POLL_INTERVAL_SECONDS"
     continue
