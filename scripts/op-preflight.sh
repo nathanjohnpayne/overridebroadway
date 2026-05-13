@@ -128,8 +128,15 @@ if $PURGE_ALL; then
   exit 0
 fi
 
-if [[ "$MODE" == "review" || "$MODE" == "all" || "$PURGE" == "true" ]] && [[ -z "$AGENT" ]]; then
-  echo "Error: --agent is required for review, all, or --purge mode." >&2
+if [[ "$MODE" == "review" || "$MODE" == "deploy" || "$MODE" == "all" || "$PURGE" == "true" ]] && [[ -z "$AGENT" ]]; then
+  # `deploy` is included here because the cache paths derived below
+  # (`op-preflight-$AGENT.env`, `op-preflight-$AGENT-adc.json`) are
+  # agent-scoped. Codex P2 #51 caught the original gap: `--mode deploy`
+  # without `--agent` resolved $SESSION_FILE to `op-preflight-.env`
+  # (the shared, agent-less path) and $ADC_TMPFILE to
+  # `op-preflight--adc.json`, defeating per-agent isolation and
+  # making `--purge --agent <name>` unable to clear that shared cache.
+  echo "Error: --agent is required for review, deploy, all, or --purge mode." >&2
   echo "Usage: eval \"\$(scripts/op-preflight.sh --agent claude --mode all)\"" >&2
   exit 1
 fi
@@ -357,14 +364,26 @@ emit_from_session_file() (
     fi
   fi
 
-  [[ -n "${OP_PREFLIGHT_REVIEWER_PAT:-}" ]] && \
-    printf 'export OP_PREFLIGHT_REVIEWER_PAT=%q\n' "$OP_PREFLIGHT_REVIEWER_PAT"
-  [[ -n "${OP_PREFLIGHT_AUTHOR_PAT:-}" ]] && \
-    printf 'export OP_PREFLIGHT_AUTHOR_PAT=%q\n' "$OP_PREFLIGHT_AUTHOR_PAT"
-  [[ -n "${GOOGLE_APPLICATION_CREDENTIALS:-}" ]] && \
-    printf 'export GOOGLE_APPLICATION_CREDENTIALS=%q\n' "$GOOGLE_APPLICATION_CREDENTIALS"
-  [[ -n "${OP_PREFLIGHT_ADC_TMPFILE:-}" ]] && \
-    printf 'export OP_PREFLIGHT_ADC_TMPFILE=%q\n' "$OP_PREFLIGHT_ADC_TMPFILE"
+  # Filter re-emitted exports by the requested --mode. Codex P2 #51
+  # caught the leak: in the cache-hit path the prior code unconditionally
+  # re-emitted every credential var present in the session file, so a
+  # `--mode review` call following an earlier `--mode all` would still
+  # leak ADC exports (and vice versa). Honor the mode contract on the
+  # cache-hit path the same way the full-fetch path does — only export
+  # PATs when the caller asked for review-capable credentials, and only
+  # export ADC when they asked for deploy-capable credentials.
+  if [[ "$MODE" == "review" || "$MODE" == "all" ]]; then
+    [[ -n "${OP_PREFLIGHT_REVIEWER_PAT:-}" ]] && \
+      printf 'export OP_PREFLIGHT_REVIEWER_PAT=%q\n' "$OP_PREFLIGHT_REVIEWER_PAT"
+    [[ -n "${OP_PREFLIGHT_AUTHOR_PAT:-}" ]] && \
+      printf 'export OP_PREFLIGHT_AUTHOR_PAT=%q\n' "$OP_PREFLIGHT_AUTHOR_PAT"
+  fi
+  if [[ "$MODE" == "deploy" || "$MODE" == "all" ]]; then
+    [[ -n "${GOOGLE_APPLICATION_CREDENTIALS:-}" ]] && \
+      printf 'export GOOGLE_APPLICATION_CREDENTIALS=%q\n' "$GOOGLE_APPLICATION_CREDENTIALS"
+    [[ -n "${OP_PREFLIGHT_ADC_TMPFILE:-}" ]] && \
+      printf 'export OP_PREFLIGHT_ADC_TMPFILE=%q\n' "$OP_PREFLIGHT_ADC_TMPFILE"
+  fi
   printf 'export OP_PREFLIGHT_DONE=1\n'
   printf 'export OP_PREFLIGHT_AGENT=%q\n' "$AGENT"
   exit 0
