@@ -331,16 +331,35 @@ def transform_at_command_position(tokens, depth=0):
             i += 1
             continue
         if tok == "eval" and i + 1 < len(tokens):
-            payload = tokens[i + 1]
+            # eval combines ALL of its arguments into a single command
+            # string, then executes that string (see `help eval`:
+            # "Combine ARGs into a single string, use the result as
+            # input to the shell, and execute the resulting commands").
+            # chatgpt-codex-connector caught (PR #52 round 2) that
+            # taking only tokens[i + 1] missed the combined-string
+            # case: `eval "gh pr" "merge 123 --admin"` actually runs
+            # `gh pr merge 123 --admin`, but a single-arg handler
+            # leaves `merge` and `--admin` in a later argument token
+            # where the bash walker never sees them as merge/admin
+            # flags. Collect every argument until the end of the
+            # current command segment (next compound separator or
+            # end-of-tokens), join with spaces, then shlex.split the
+            # combined payload.
+            j = i + 1
+            args = []
+            while j < len(tokens) and tokens[j] not in COMPOUND_SEPARATORS:
+                args.append(tokens[j])
+                j += 1
+            payload = " ".join(args)
             try:
                 inner_raw = shlex.split(payload)
             except ValueError:
-                # Malformed inner payload — leave the eval+arg pair
+                # Malformed combined payload — leave eval and its args
                 # in place. The bash walker will treat eval as a prefix
-                # command and the literal payload as an unrelated command,
-                # so SAW_GH stays 0 and the hook exits 0. This is the
-                # same fail-open posture used for every other non-gh
-                # invocation; the merge guard is not bypassed.
+                # command and the rest as unrelated tokens, so SAW_GH
+                # stays 0 and the hook exits 0. Same fail-open posture
+                # used for every other non-gh invocation; the merge
+                # guard is not bypassed.
                 out.append(tok)
                 in_prefix = True
                 i += 1
@@ -350,7 +369,7 @@ def transform_at_command_position(tokens, depth=0):
             else:
                 inner = inner_raw
             out.extend(inner)
-            i += 2
+            i = j  # advance past `eval` and every consumed argument
             # The spliced inner already represents one full command;
             # after splicing we are in argument position of that command.
             at_cmd_pos = False
