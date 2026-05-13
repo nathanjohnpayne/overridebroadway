@@ -199,7 +199,7 @@ trap 'rm -f "$TMP_TOKENS" "$TMP_TOKENS_ERR"' EXIT
 # via newline-separated prefix command was the same shape as the
 # round-5 echo-prefix env spoof, just on a different separator.
 if ! printf '%s' "$COMMAND" | python3 -c '
-import sys, shlex
+import sys, shlex, re
 
 def normalize_unquoted_newlines(cmd):
     """Replace newlines OUTSIDE of single/double quotes with `; `.
@@ -234,63 +234,128 @@ def normalize_unquoted_newlines(cmd):
         i += 1
     return "".join(out)
 
-def normalize_path_qualified_gh(tok):
-    """Rewrite path-qualified gh (`/usr/bin/gh`, `./gh`, `bin/gh`) to
-    bare `gh` so the bash token walk recognizes the basename. The
-    rewrite is a no-op for tokens whose basename is not exactly `gh`
-    (no false positives on `gh-foo`, `ghost`, `/usr/bin/ghx`, or on a
-    string arg like `"/usr/bin/gh foo"` whose final segment is
-    `gh foo`, not `gh`). nathanpayne-codex caught the bypass on
-    PR #28: `/usr/bin/gh pr merge 123 --admin` skipped the hook
-    because the bare `gh` match did not recognize path-qualified
-    invocations."""
-    if "/" in tok and tok.rsplit("/", 1)[-1] == "gh":
-        return "gh"
-    return tok
+# Constants mirrored from the bash walker. Keep these in sync with the
+# `case` statements below in this same file — drift would let one layer
+# admit a prefix command the other rejects.
+SHELL_DASH_C = {"bash", "sh", "dash", "zsh", "ash"}
+PREFIX_COMMANDS = {"sudo", "eval", "time", "nohup", "env",
+                   "command", "exec", "nice", "ionice"}
+COMPOUND_SEPARATORS = {";", "&&", "||", "|", "&", "(", ")"}
+ENV_ASSIGN_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*=")
 
-def expand_eval_one_level(tokens):
-    """Re-tokenize the single string argument of an `eval` /
-    `bash -c` / `sh -c` / `dash -c` prefix through shlex.split and
-    splice the result in place. Bounded to ONE pass — nested
-    `eval "eval ...gh..."` or `bash -c "bash -c \"gh ...\""` is
-    intentionally NOT re-expanded a second time. The hook fails
-    closed on nested wrappers because the inner string remains a
-    literal token, falls into the unrelated-command branch, and
-    exits 0 only if no gh-context subcommand is detected (which
-    is the correct behavior — we do not bypass the merge guard,
-    we just do not parse the deepest layer either).
-    nathanpayne-codex caught the original bypass on PR #28:
-    `eval "gh pr merge 123 --admin"` shlex-tokenized to [`eval`,
-    `gh pr merge 123 --admin`], the latter token failed the bare
-    `gh` match in the bash walk, and the hook exited 0. The
-    `bash -c "gh ..."` variant has the same shape with one extra
-    `-c` flag token."""
-    SHELL_DASH_C = {"bash", "sh", "dash", "zsh", "ash"}
+def is_env_assignment(tok):
+    return bool(ENV_ASSIGN_RE.match(tok))
+
+def is_path_qualified_gh(tok):
+    """True only when the final path component is exactly `gh`.
+    Excludes `gh-foo`, `ghost`, `ghx`, branch names like `feature/gh-1`,
+    and string args whose final segment is `gh foo` (with a trailing
+    word — the rsplit returns `gh foo`, not `gh`)."""
+    return "/" in tok and tok.rsplit("/", 1)[-1] == "gh"
+
+def transform_at_command_position(tokens, depth=0):
+    """Single forward pass that tracks command-position state and
+    applies BOTH path-qualified gh normalization AND eval/bash -c
+    payload re-tokenization ONLY when the token under consideration is
+    in command position. Gating is critical to avoid false positives:
+
+    - chatgpt-codex-connector caught (PR #52 round 1) that
+      `gh pr merge feature/gh` had the `feature/gh` selector rewritten
+      to `gh` by an ungated normalizer, causing the merge guard to
+      validate the wrong PR before allowing the real command through.
+    - The same shape applies to eval-as-an-argument-value: in
+      `gh pr merge 65 --subject eval --admin`, an ungated expander
+      would splice `--admin` into the --subject value slot, hiding
+      it from the merge walk and bypassing the BREAK_GLASS gate.
+
+    Command position is what bash semantically considers the slot
+    where a command name (vs an argument value) appears: start of
+    stream, after a compound separator (;, &&, ||, |, &, (, )),
+    after an env-assignment prefix (VAR=value), or after a known
+    prefix command (sudo, eval, time, etc.). Inside the flag list
+    of a prefix command we stay at command position so that
+    `sudo -u user gh ...` still recognizes `gh` as the command.
+
+    Recursion is bounded to MAX_DEPTH levels — the spliced payload
+    of an `eval`/`bash -c` runs through this transform up to that
+    many times before further nested wrappers stop being peeled.
+    Because each level still expands its own eval once before the
+    recursion check fires, MAX_DEPTH=N handles up to N+1 layers of
+    nesting in practice. Beyond that, the hook fails closed (the
+    deepest layer remains a literal token, falls into the
+    unrelated-command branch in the bash walker, and exits 0 only
+    when no gh-context subcommand is detected). Five is generous —
+    realistic adversarial nesting is one or two layers, and the
+    audit trail captures any deeper attempt unmistakably."""
+    MAX_DEPTH = 5
     out = []
     i = 0
+    at_cmd_pos = True
+    in_prefix = False  # walking flags of the most recent prefix command
     while i < len(tokens):
         tok = tokens[i]
-        # `eval STR` — payload is the very next token.
+        if not at_cmd_pos:
+            # Argument of the running command — pass through. Separators
+            # reset us back to command position.
+            if tok in COMPOUND_SEPARATORS:
+                at_cmd_pos = True
+                in_prefix = False
+            out.append(tok)
+            i += 1
+            continue
+        # We are at command position.
+        if tok in COMPOUND_SEPARATORS:
+            in_prefix = False
+            out.append(tok)
+            i += 1
+            continue
+        if is_env_assignment(tok):
+            # `VAR=value` — stay at command position; this is a prefix
+            # to the actual command that follows.
+            out.append(tok)
+            i += 1
+            continue
+        if in_prefix and tok.startswith("-"):
+            # Flag of the most recent prefix command. We do not have
+            # the per-prefix value-flag map here (that lives in the
+            # bash walker by design) so we conservatively pass through
+            # without consuming a value. If the flag is value-taking,
+            # the next token will be treated as command position and
+            # we may misclassify it — but the bash walker independently
+            # re-derives the correct value-flag semantics and the only
+            # observable effect here is whether path-qualified-gh
+            # normalization or eval expansion fires one token earlier
+            # than ideal. Both transforms are no-ops on non-matching
+            # tokens, so the cost is bounded.
+            out.append(tok)
+            i += 1
+            continue
         if tok == "eval" and i + 1 < len(tokens):
             payload = tokens[i + 1]
             try:
-                inner = shlex.split(payload)
+                inner_raw = shlex.split(payload)
             except ValueError:
                 # Malformed inner payload — leave the eval+arg pair
-                # in place so the bash walk treats it as an unrelated
-                # command (SAW_GH stays 0, hook exits 0). This is the
-                # same fail-open posture the hook uses for any other
-                # non-gh invocation; the merge guard is not bypassed.
+                # in place. The bash walker will treat eval as a prefix
+                # command and the literal payload as an unrelated command,
+                # so SAW_GH stays 0 and the hook exits 0. This is the
+                # same fail-open posture used for every other non-gh
+                # invocation; the merge guard is not bypassed.
                 out.append(tok)
+                in_prefix = True
                 i += 1
                 continue
+            if depth < MAX_DEPTH:
+                inner = transform_at_command_position(inner_raw, depth=depth + 1)
+            else:
+                inner = inner_raw
             out.extend(inner)
             i += 2
+            # The spliced inner already represents one full command;
+            # after splicing we are in argument position of that command.
+            at_cmd_pos = False
+            in_prefix = False
             continue
-        # `bash -c STR` / `sh -c STR` — payload is two tokens away.
-        # The `-c` form is the documented way to run a string as a
-        # command in POSIX shells; an agent could otherwise spell
-        # `bash -c "gh pr merge 123 --admin"` and bypass the guard.
         if (
             tok in SHELL_DASH_C
             and i + 2 < len(tokens)
@@ -298,15 +363,47 @@ def expand_eval_one_level(tokens):
         ):
             payload = tokens[i + 2]
             try:
-                inner = shlex.split(payload)
+                inner_raw = shlex.split(payload)
             except ValueError:
                 out.append(tok)
                 i += 1
                 continue
+            if depth < MAX_DEPTH:
+                inner = transform_at_command_position(inner_raw, depth=depth + 1)
+            else:
+                inner = inner_raw
             out.extend(inner)
             i += 3
+            at_cmd_pos = False
+            in_prefix = False
             continue
+        if tok in PREFIX_COMMANDS:
+            # Known prefix command (sudo, time, nohup, etc.). Stay at
+            # command position so the actual command behind the prefix
+            # still gets normalized. eval was handled above as a
+            # special-case prefix because it consumes its payload as a
+            # single string rather than as separate argv positions.
+            out.append(tok)
+            in_prefix = True
+            i += 1
+            continue
+        if is_path_qualified_gh(tok):
+            # Path-qualified gh in command position — rewrite to the
+            # bare `gh` token so the bash walker recognizes it via the
+            # existing `gh)` case. Gated to command position so that
+            # branch-name selectors like `feature/gh` (caught by Codex
+            # on PR #52 round 1) are not mangled.
+            out.append("gh")
+            at_cmd_pos = False
+            in_prefix = False
+            i += 1
+            continue
+        # Any other token at command position is the command name
+        # itself (gh, echo, cat, find, etc.). Subsequent tokens are
+        # its arguments until the next separator.
         out.append(tok)
+        at_cmd_pos = False
+        in_prefix = False
         i += 1
     return out
 
@@ -314,8 +411,7 @@ try:
     cmd = sys.stdin.read()
     cmd = normalize_unquoted_newlines(cmd)
     tokens = shlex.split(cmd)
-    tokens = expand_eval_one_level(tokens)
-    tokens = [normalize_path_qualified_gh(t) for t in tokens]
+    tokens = transform_at_command_position(tokens)
     for tok in tokens:
         sys.stdout.buffer.write(tok.encode("utf-8", errors="replace") + b"\x00")
 except ValueError as e:
