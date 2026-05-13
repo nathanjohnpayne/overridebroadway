@@ -143,7 +143,14 @@ COMMAND=$(echo "$INPUT" | jq -r '.tool_input.command // empty')
 # the eval wrapper. Without this, `eval "gh ..."` would exit 0 at
 # the early check because the `gh` token is preceded by `"`, not
 # whitespace.
-if ! echo "$COMMAND" | grep -qE '(^|[[:space:]=;&|("'"'"'])(\S*/)?gh([[:space:]"'"'"']|$)'; then
+# POSIX-portable character classes only — chatgpt-codex-connector
+# flagged (PR #52 round 3) that `\S` is a GNU grep extension that
+# may be treated as a literal escaped character on strict-POSIX
+# greps. Modern macOS BSD grep supports it, but the file explicitly
+# targets Bash 3.2 portability, so use `[^[:space:]]` for the
+# non-whitespace class to match the same POSIX-safe style as
+# `[[:space:]]`.
+if ! echo "$COMMAND" | grep -qE '(^|[[:space:]=;&|("'"'"'])([^[:space:]]*/)?gh([[:space:]"'"'"']|$)'; then
   exit 0
 fi
 
@@ -252,6 +259,19 @@ def is_path_qualified_gh(tok):
     and string args whose final segment is `gh foo` (with a trailing
     word — the rsplit returns `gh foo`, not `gh`)."""
     return "/" in tok and tok.rsplit("/", 1)[-1] == "gh"
+
+def is_dash_c_flag(tok):
+    """True for `-c` and any clustered short-flag combo ending in `c`
+    (`-lc`, `-xc`, `-lvc`, ...). bash/sh/dash all support clustered
+    short flags, and `c` is value-taking — when a cluster ends with
+    `c`, the next argv is the command string. False for `--config`,
+    `-l` (no c), `-` (no chars), `-cl` (c is not at end)."""
+    return (
+        tok.startswith("-")
+        and not tok.startswith("--")
+        and len(tok) >= 2
+        and tok.endswith("c")
+    )
 
 def transform_at_command_position(tokens, depth=0):
     """Single forward pass that tracks command-position state and
@@ -378,8 +398,20 @@ def transform_at_command_position(tokens, depth=0):
         if (
             tok in SHELL_DASH_C
             and i + 2 < len(tokens)
-            and tokens[i + 1] == "-c"
+            and is_dash_c_flag(tokens[i + 1])
         ):
+            # `bash -c CMD`, but also `bash -lc CMD`, `bash -xc CMD`,
+            # `bash -lvc CMD`, etc. POSIX shells accept clustered
+            # short flags, and `-c` is value-taking — when it appears
+            # in a cluster ending with `c`, the next argv is the
+            # command string. chatgpt-codex-connector caught (PR #52
+            # round 3) the cluster bypass: `bash -lc "gh pr merge
+            # 123 --admin"` skipped the round-1 literal `-c` check.
+            # `-c` mid-cluster (e.g. `-cl`) is intentionally NOT
+            # matched — bash treats those rare forms as `c="l"`
+            # (rest-of-cluster is the value), and an agent that
+            # spells them is exhibiting clearly adversarial intent
+            # captured by the audit trail.
             payload = tokens[i + 2]
             try:
                 inner_raw = shlex.split(payload)
