@@ -84,7 +84,12 @@ author_identity: nathanjohnpayne
 # CodeRabbit GitHub App. All agent instructions use conditional language
 # and will skip Phase 2.5 automatically.
 coderabbit:
-  enabled: false
+  # Re-enabled per #79. CodeRabbit Pro covers private repos and was already
+  # reviewing every PR here while this flag stayed false, so the agent
+  # workflow was skipping reviews it should act on. The prior `false` was a
+  # free-tier-era straggler; sibling private repos matchline/tadlockpsychiatry
+  # are already enabled under Pro.
+  enabled: true
 
 # ---------------------------------------------------------------------------
 # Codex (Automated External Review — Phase 4a)
