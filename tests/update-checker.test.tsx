@@ -24,6 +24,13 @@ vi.mock("sonner", () => ({
 let originalNodeEnv: string | undefined;
 let originalBuildId: string | undefined;
 
+// `process.env.NODE_ENV` is typed as a readonly literal union by the Next /
+// @types/node ambient declarations, so assigning to it is a type error even
+// though it is writable at runtime. These tests deliberately re-set it to
+// re-evaluate the module under a different mode. This alias keeps the
+// existing runtime behaviour and only widens the type at the assignment.
+const mutableEnv = process.env as Record<string, string | undefined>;
+
 beforeEach(() => {
   vi.clearAllMocks();
   vi.useFakeTimers();
@@ -36,7 +43,7 @@ beforeEach(() => {
 afterEach(() => {
   vi.useRealTimers();
   vi.restoreAllMocks();
-  process.env.NODE_ENV = originalNodeEnv;
+  mutableEnv.NODE_ENV = originalNodeEnv;
   process.env.NEXT_PUBLIC_BUILD_ID = originalBuildId;
   cleanup();
 });
@@ -55,7 +62,7 @@ async function createUpdateChecker(envOverrides: {
 }) {
   // Set env vars BEFORE module is parsed
   if (envOverrides.NODE_ENV !== undefined) {
-    process.env.NODE_ENV = envOverrides.NODE_ENV;
+    mutableEnv.NODE_ENV = envOverrides.NODE_ENV;
   }
   if (envOverrides.NEXT_PUBLIC_BUILD_ID !== undefined) {
     process.env.NEXT_PUBLIC_BUILD_ID = envOverrides.NEXT_PUBLIC_BUILD_ID;

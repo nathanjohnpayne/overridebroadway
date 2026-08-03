@@ -141,8 +141,12 @@ describe("DashboardPage", () => {
       mockLoading = false;
 
       // We need to render with the investments view query param
-      vi.mocked(await import("next/navigation")).useSearchParams = () =>
-        new URLSearchParams("view=investments") as ReturnType<typeof import("next/navigation").useSearchParams>;
+      vi.mocked(await import("next/navigation")).useSearchParams = vi.fn(
+        () =>
+          new URLSearchParams("view=investments") as ReturnType<
+            typeof import("next/navigation").useSearchParams
+          >,
+      );
 
       // Re-import to pick up the new mock
       vi.resetModules();
