@@ -8,7 +8,7 @@
     "build": "next build",
     "postbuild": "node scripts/postbuild.mjs",
     "start": "next start",
-    "lint": "eslint --ignore-pattern 'out/**'",
+    "lint": "eslint --config eslint.local.config.js --ignore-pattern 'out/**'",
     "test": "vitest run",
     "deploy": "op-firebase-deploy",
     "deploy:hosting": "op-firebase-deploy --only hosting"
