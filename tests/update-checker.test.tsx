@@ -31,6 +31,14 @@ let originalBuildId: string | undefined;
 // existing runtime behaviour and only widens the type at the assignment.
 const mutableEnv = process.env as Record<string, string | undefined>;
 
+function restoreEnv(name: string, value: string | undefined): void {
+  if (value === undefined) {
+    delete mutableEnv[name];
+  } else {
+    mutableEnv[name] = value;
+  }
+}
+
 beforeEach(() => {
   vi.clearAllMocks();
   vi.useFakeTimers();
@@ -43,8 +51,8 @@ beforeEach(() => {
 afterEach(() => {
   vi.useRealTimers();
   vi.restoreAllMocks();
-  mutableEnv.NODE_ENV = originalNodeEnv;
-  process.env.NEXT_PUBLIC_BUILD_ID = originalBuildId;
+  restoreEnv("NODE_ENV", originalNodeEnv);
+  restoreEnv("NEXT_PUBLIC_BUILD_ID", originalBuildId);
   cleanup();
 });
 

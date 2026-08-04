@@ -16,9 +16,10 @@ import type { Production, ProductionStatus } from "@/types/production";
 // ---------------------------------------------------------------------------
 
 const mockPush = vi.fn();
+const mockUseSearchParams = vi.fn(() => new URLSearchParams());
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: mockPush }),
-  useSearchParams: () => new URLSearchParams(),
+  useSearchParams: mockUseSearchParams,
 }));
 
 vi.mock("sonner", () => ({
@@ -101,6 +102,7 @@ beforeEach(() => {
   // Reset module-level state by reassigning mockProductions contents
   mockProductions.length = 0;
   mockLoading = false;
+  mockUseSearchParams.mockReturnValue(new URLSearchParams());
 });
 
 describe("DashboardPage", () => {
@@ -140,16 +142,13 @@ describe("DashboardPage", () => {
       mockProductions.length = 0;
       mockLoading = false;
 
-      // We need to render with the investments view query param
-      vi.mocked(await import("next/navigation")).useSearchParams = vi.fn(
-        () =>
-          new URLSearchParams("view=investments") as ReturnType<
-            typeof import("next/navigation").useSearchParams
-          >,
-      );
+      // The page reads the mock at render time, so configure the
+      // function itself rather than mutating an imported module
+      // namespace after it has been captured by the page module.
+      mockUseSearchParams.mockReturnValue(new URLSearchParams("view=investments"));
+      render(<DashboardPage />);
 
-      // Re-import to pick up the new mock
-      vi.resetModules();
+      expect(await screen.findByText("No personal investments tracked")).toBeInTheDocument();
     });
   });
 
