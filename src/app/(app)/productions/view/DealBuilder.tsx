@@ -69,7 +69,7 @@ export function DealBuilder({
   control,
   watch,
   setValue,
-  getValues,
+  getValues: _getValues,
   handleSubmit,
   isDirty,
   saving,

@@ -173,7 +173,6 @@ module.exports = [
     },
   },
 
-
 // React Compiler advisory disables are now INSIDE the React block(s)
 // above (so they inherit the same `files:` and `plugins:` scope and
 // don't reference react-hooks/* on files where the plugin isn't

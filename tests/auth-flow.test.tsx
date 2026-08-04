@@ -48,7 +48,19 @@ const mockSignInWithPopup = vi.fn();
 const mockFirebaseSignOut = vi.fn();
 const mockOnAuthStateChanged = vi.fn();
 const mockUpdateProfile = vi.fn();
-const mockSetPersistence = vi.fn(() => Promise.resolve());
+
+// `mockSetPersistence` has to be hoisted, unlike the mocks above it.
+// src/lib/firebase.ts calls setPersistence() at module scope, so it runs the
+// moment AuthContext imports it — before this module body has evaluated. As a
+// plain `const` it was still in its temporal dead zone at that point, and the
+// whole suite died on "Cannot access 'mockSetPersistence' before
+// initialization" before a single test ran. vi.hoisted lifts the definition
+// above the vi.mock factories, which is where the import-time call reaches it.
+// The `..._args` rest parameter also gives it a signature the spread call in
+// the factory below can type-check against.
+const { mockSetPersistence } = vi.hoisted(() => ({
+  mockSetPersistence: vi.fn((..._args: unknown[]) => Promise.resolve()),
+}));
 
 vi.mock("firebase/auth", () => ({
   getAuth: vi.fn(() => ({})),

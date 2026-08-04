@@ -8,6 +8,13 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, waitFor, act } from "@testing-library/react";
 import React from "react";
+import type {
+  Control,
+  UseFormGetValues,
+  UseFormHandleSubmit,
+  UseFormSetValue,
+  UseFormWatch,
+} from "react-hook-form";
 import { DEFAULT_DEAL_INPUTS, type DealInputs } from "@/types/deal";
 import type { ModelOutput } from "@/types/model";
 
@@ -36,6 +43,34 @@ vi.mock("@/lib/firestore", () => ({
   getDealInputs: (...args: unknown[]) => mockGetDealInputs(...args),
   saveDealInputs: (...args: unknown[]) => mockSaveDealInputs(...args),
   subscribeToProductions: vi.fn(),
+}));
+
+// The parent owns the form; these rendering tests cover DealBuilder's shell
+// only, so replace form-consuming sections with inert children instead of
+// constructing a second DealInputs form outside ProductionHubClient.
+vi.mock("@/app/(app)/productions/view/DealBuilderNav", () => ({
+  DealBuilderNav: () => <div />,
+}));
+vi.mock("@/app/(app)/productions/view/LiveOutcomePanel", () => ({
+  LiveOutcomePanel: () => <div />,
+}));
+vi.mock("@/app/(app)/productions/view/sections/CapitalizationSection", () => ({
+  CapitalizationSection: () => <div />,
+}));
+vi.mock("@/app/(app)/productions/view/sections/WeeklyEconomicsSection", () => ({
+  WeeklyEconomicsSection: () => <div />,
+}));
+vi.mock("@/app/(app)/productions/view/sections/RevenueSection", () => ({
+  RevenueSection: () => <div />,
+}));
+vi.mock("@/app/(app)/productions/view/sections/RoyaltiesSection", () => ({
+  RoyaltiesSection: () => <div />,
+}));
+vi.mock("@/app/(app)/productions/view/sections/WaterfallSection", () => ({
+  WaterfallSection: () => <div />,
+}));
+vi.mock("@/hooks/useDebounce", () => ({
+  useDebounce: <T,>(value: T) => value,
 }));
 
 // ---------------------------------------------------------------------------
@@ -308,7 +343,8 @@ describe("DEFAULT_DEAL_INPUTS", () => {
 // ---------------------------------------------------------------------------
 
 describe("DealBuilder component", () => {
-  // We test the DealBuilder component in isolation using its props interface
+  // These tests exercise the parent shell with a non-owning prop fixture. The
+  // real DealInputs form is owned only by ProductionHubClient.
   let DealBuilder: typeof import("@/app/(app)/productions/view/DealBuilder").DealBuilder;
 
   beforeEach(async () => {
@@ -317,6 +353,36 @@ describe("DealBuilder component", () => {
     );
     DealBuilder = mod.DealBuilder;
   });
+
+  function renderDealBuilder(overrides: {
+    isDirty: boolean;
+    saving: boolean;
+    modelOutput: ModelOutput | null;
+  }) {
+    const onSave = vi.fn().mockResolvedValue(undefined);
+    const control = {} as Control<DealInputs>;
+    const watch = (() => DEFAULT_DEAL_INPUTS) as unknown as UseFormWatch<DealInputs>;
+    const setValue = (() => undefined) as unknown as UseFormSetValue<DealInputs>;
+    const getValues = (() => DEFAULT_DEAL_INPUTS) as unknown as UseFormGetValues<DealInputs>;
+    const handleSubmit = (() => () => undefined) as unknown as UseFormHandleSubmit<DealInputs>;
+
+    return render(
+      <DealBuilder
+        control={control}
+        watch={watch}
+        setValue={setValue}
+        getValues={getValues}
+        handleSubmit={handleSubmit}
+        isDirty={overrides.isDirty}
+        saving={overrides.saving}
+        modelOutput={overrides.modelOutput}
+        dealInputs={DEFAULT_DEAL_INPUTS}
+        onSave={onSave}
+        initialGuidedMode={false}
+        onGuidedModeChange={vi.fn()}
+      />,
+    );
+  }
 
   it("renders the save button", () => {
     const baseOutput: ModelOutput = {
@@ -333,29 +399,7 @@ describe("DealBuilder component", () => {
       weeklyBreakeven: null,
     };
 
-    // Minimal react-hook-form mocks
-    const control = {} as any;
-    const watch = vi.fn(() => DEFAULT_DEAL_INPUTS) as any;
-    const setValue = vi.fn() as any;
-    const getValues = vi.fn(() => DEFAULT_DEAL_INPUTS) as any;
-    const handleSubmit = vi.fn((fn: any) => (e: any) => { e?.preventDefault?.(); fn(DEFAULT_DEAL_INPUTS); }) as any;
-
-    render(
-      <DealBuilder
-        control={control}
-        watch={watch}
-        setValue={setValue}
-        getValues={getValues}
-        handleSubmit={handleSubmit}
-        isDirty={false}
-        saving={false}
-        modelOutput={baseOutput}
-        dealInputs={DEFAULT_DEAL_INPUTS}
-        onSave={vi.fn()}
-        initialGuidedMode={false}
-        onGuidedModeChange={vi.fn()}
-      />,
-    );
+    renderDealBuilder({ isDirty: false, saving: false, modelOutput: baseOutput });
 
     expect(
       screen.getByRole("button", { name: /save deal inputs/i }),
@@ -363,55 +407,13 @@ describe("DealBuilder component", () => {
   });
 
   it("shows 'Unsaved changes' badge when isDirty is true", () => {
-    const control = {} as any;
-    const watch = vi.fn(() => DEFAULT_DEAL_INPUTS) as any;
-    const setValue = vi.fn() as any;
-    const getValues = vi.fn(() => DEFAULT_DEAL_INPUTS) as any;
-    const handleSubmit = vi.fn((fn: any) => (e: any) => { e?.preventDefault?.(); }) as any;
-
-    render(
-      <DealBuilder
-        control={control}
-        watch={watch}
-        setValue={setValue}
-        getValues={getValues}
-        handleSubmit={handleSubmit}
-        isDirty={true}
-        saving={false}
-        modelOutput={null}
-        dealInputs={DEFAULT_DEAL_INPUTS}
-        onSave={vi.fn()}
-        initialGuidedMode={false}
-        onGuidedModeChange={vi.fn()}
-      />,
-    );
+    renderDealBuilder({ isDirty: true, saving: false, modelOutput: null });
 
     expect(screen.getByText("Unsaved changes")).toBeInTheDocument();
   });
 
   it("shows 'Saving...' text when saving is true", () => {
-    const control = {} as any;
-    const watch = vi.fn(() => DEFAULT_DEAL_INPUTS) as any;
-    const setValue = vi.fn() as any;
-    const getValues = vi.fn(() => DEFAULT_DEAL_INPUTS) as any;
-    const handleSubmit = vi.fn((fn: any) => (e: any) => { e?.preventDefault?.(); }) as any;
-
-    render(
-      <DealBuilder
-        control={control}
-        watch={watch}
-        setValue={setValue}
-        getValues={getValues}
-        handleSubmit={handleSubmit}
-        isDirty={false}
-        saving={true}
-        modelOutput={null}
-        dealInputs={DEFAULT_DEAL_INPUTS}
-        onSave={vi.fn()}
-        initialGuidedMode={false}
-        onGuidedModeChange={vi.fn()}
-      />,
-    );
+    renderDealBuilder({ isDirty: false, saving: true, modelOutput: null });
 
     expect(
       screen.getByRole("button", { name: /saving\.\.\./i }),
