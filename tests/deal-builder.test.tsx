@@ -8,6 +8,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, waitFor, act } from "@testing-library/react";
 import React from "react";
+import { useForm } from "react-hook-form";
 import { DEFAULT_DEAL_INPUTS, type DealInputs } from "@/types/deal";
 import type { ModelOutput } from "@/types/model";
 
@@ -318,6 +319,34 @@ describe("DealBuilder component", () => {
     DealBuilder = mod.DealBuilder;
   });
 
+  function renderDealBuilder(overrides: {
+    isDirty: boolean;
+    saving: boolean;
+    modelOutput: ModelOutput | null;
+  }) {
+    const onSave = vi.fn().mockResolvedValue(undefined);
+    function Fixture() {
+      const form = useForm<DealInputs>({ defaultValues: DEFAULT_DEAL_INPUTS });
+      return (
+        <DealBuilder
+          control={form.control}
+          watch={form.watch}
+          setValue={form.setValue}
+          getValues={form.getValues}
+          handleSubmit={form.handleSubmit}
+          isDirty={overrides.isDirty}
+          saving={overrides.saving}
+          modelOutput={overrides.modelOutput}
+          dealInputs={DEFAULT_DEAL_INPUTS}
+          onSave={onSave}
+          initialGuidedMode={false}
+          onGuidedModeChange={vi.fn()}
+        />
+      );
+    }
+    return render(<Fixture />);
+  }
+
   it("renders the save button", () => {
     const baseOutput: ModelOutput = {
       dealInputs: DEFAULT_DEAL_INPUTS,
@@ -333,29 +362,7 @@ describe("DealBuilder component", () => {
       weeklyBreakeven: null,
     };
 
-    // Minimal react-hook-form mocks
-    const control = {} as any;
-    const watch = vi.fn(() => DEFAULT_DEAL_INPUTS) as any;
-    const setValue = vi.fn() as any;
-    const getValues = vi.fn(() => DEFAULT_DEAL_INPUTS) as any;
-    const handleSubmit = vi.fn((fn: any) => (e: any) => { e?.preventDefault?.(); fn(DEFAULT_DEAL_INPUTS); }) as any;
-
-    render(
-      <DealBuilder
-        control={control}
-        watch={watch}
-        setValue={setValue}
-        getValues={getValues}
-        handleSubmit={handleSubmit}
-        isDirty={false}
-        saving={false}
-        modelOutput={baseOutput}
-        dealInputs={DEFAULT_DEAL_INPUTS}
-        onSave={vi.fn()}
-        initialGuidedMode={false}
-        onGuidedModeChange={vi.fn()}
-      />,
-    );
+    renderDealBuilder({ isDirty: false, saving: false, modelOutput: baseOutput });
 
     expect(
       screen.getByRole("button", { name: /save deal inputs/i }),
@@ -363,55 +370,13 @@ describe("DealBuilder component", () => {
   });
 
   it("shows 'Unsaved changes' badge when isDirty is true", () => {
-    const control = {} as any;
-    const watch = vi.fn(() => DEFAULT_DEAL_INPUTS) as any;
-    const setValue = vi.fn() as any;
-    const getValues = vi.fn(() => DEFAULT_DEAL_INPUTS) as any;
-    const handleSubmit = vi.fn((fn: any) => (e: any) => { e?.preventDefault?.(); }) as any;
-
-    render(
-      <DealBuilder
-        control={control}
-        watch={watch}
-        setValue={setValue}
-        getValues={getValues}
-        handleSubmit={handleSubmit}
-        isDirty={true}
-        saving={false}
-        modelOutput={null}
-        dealInputs={DEFAULT_DEAL_INPUTS}
-        onSave={vi.fn()}
-        initialGuidedMode={false}
-        onGuidedModeChange={vi.fn()}
-      />,
-    );
+    renderDealBuilder({ isDirty: true, saving: false, modelOutput: null });
 
     expect(screen.getByText("Unsaved changes")).toBeInTheDocument();
   });
 
   it("shows 'Saving...' text when saving is true", () => {
-    const control = {} as any;
-    const watch = vi.fn(() => DEFAULT_DEAL_INPUTS) as any;
-    const setValue = vi.fn() as any;
-    const getValues = vi.fn(() => DEFAULT_DEAL_INPUTS) as any;
-    const handleSubmit = vi.fn((fn: any) => (e: any) => { e?.preventDefault?.(); }) as any;
-
-    render(
-      <DealBuilder
-        control={control}
-        watch={watch}
-        setValue={setValue}
-        getValues={getValues}
-        handleSubmit={handleSubmit}
-        isDirty={false}
-        saving={true}
-        modelOutput={null}
-        dealInputs={DEFAULT_DEAL_INPUTS}
-        onSave={vi.fn()}
-        initialGuidedMode={false}
-        onGuidedModeChange={vi.fn()}
-      />,
-    );
+    renderDealBuilder({ isDirty: false, saving: true, modelOutput: null });
 
     expect(
       screen.getByRole("button", { name: /saving\.\.\./i }),

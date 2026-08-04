@@ -6,7 +6,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, waitFor, within } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import React from "react";
 import type { Production, ProductionStatus } from "@/types/production";
@@ -15,8 +15,10 @@ import type { Production, ProductionStatus } from "@/types/production";
 // Mocks
 // ---------------------------------------------------------------------------
 
-const mockPush = vi.fn();
-const mockUseSearchParams = vi.fn(() => new URLSearchParams());
+const { mockPush, mockUseSearchParams } = vi.hoisted(() => ({
+  mockPush: vi.fn(),
+  mockUseSearchParams: vi.fn(() => new URLSearchParams()),
+}));
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: mockPush }),
   useSearchParams: mockUseSearchParams,
@@ -115,6 +117,7 @@ describe("DashboardPage", () => {
       // The dashboard renders 3 skeleton cards during loading
       // Skeletons use the .h-48 class and are in a grid
       const skeletons = document.querySelectorAll(".animate-pulse, [class*='skeleton']");
+      expect(skeletons.length).toBeGreaterThan(0);
       // We should see placeholder content (no production cards)
       expect(screen.queryByText("Hamilton")).not.toBeInTheDocument();
     });
@@ -133,9 +136,11 @@ describe("DashboardPage", () => {
           "Create your first production to start modeling its deal structure.",
         ),
       ).toBeInTheDocument();
+      // Both the header and the empty state offer creation, so this
+      // assertion deliberately checks both accessible actions.
       expect(
-        screen.getByRole("button", { name: /new production/i }),
-      ).toBeInTheDocument();
+        screen.getAllByRole("button", { name: /^new production$/i }),
+      ).toHaveLength(2);
     });
 
     it("shows the investments empty state when no personal investments exist", async () => {
@@ -318,7 +323,7 @@ describe("DashboardPage", () => {
 
       // Confirmation dialog appears
       await waitFor(() => {
-        expect(screen.getByText(/delete/i)).toBeInTheDocument();
+        expect(screen.getByRole("dialog")).toBeInTheDocument();
         expect(
           screen.getByRole("button", { name: /^delete$/i }),
         ).toBeInTheDocument();

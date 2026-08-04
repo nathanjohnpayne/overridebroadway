@@ -6,7 +6,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { render, act, waitFor, cleanup } from "@testing-library/react";
+import { render, act, cleanup } from "@testing-library/react";
 import React from "react";
 
 // ---------------------------------------------------------------------------
