@@ -105,11 +105,13 @@ service cloud.firestore {
           && (!('investors' in d) || (d.investors is list && d.investors.size() == 0));
       }
 
-      // A direct get by token: allowed for active rooms and for the owner.
+      // A direct get by token: allowed for active rooms whose snapshot honors
+      // the documents opt-in, and always for the owner. Rooms written before
+      // that was enforced fail closed for non-owners until re-saved.
       // A get of a token that does not exist is allowed (returns "not found")
       // so the investor view can tell a bad link from a deactivated one.
       allow get: if resource == null
-        || resource.data.isActive == true
+        || (resource.data.isActive == true && documentsMatchConfig(resource.data))
         || isDealRoomOwner();
 
       // Queries are owner-only; they must filter on ownedByUserId.
@@ -134,6 +136,9 @@ service cloud.firestore {
 
       // Owner, productionId and createdAt are immutable; only the published
       // snapshot, config, active flag and timestamps may change.
+      // Any change to config/production, and any (re)activation, must leave
+      // a snapshot that honors the documents opt-in; deactivating is always
+      // allowed.
       allow update: if isDealRoomOwner()
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
           'production', 'dealInputs', 'config', 'isActive', 'updatedAt', 'expiresAt'])
@@ -143,7 +148,9 @@ service cloud.firestore {
           || validDealInputs(request.resource.data.dealInputs))
         && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['config'])
           || validConfig(request.resource.data.config))
-        && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['config', 'production'])
+        && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['config', 'production', 'isActive'])
+          || (request.resource.data.isActive == false
+            && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['config', 'production']))
           || documentsMatchConfig(request.resource.data))
         && request.resource.data.isActive is bool
         && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['updatedAt'])

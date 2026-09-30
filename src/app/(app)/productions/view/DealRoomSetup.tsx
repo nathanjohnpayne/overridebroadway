@@ -308,10 +308,30 @@ export function DealRoomSetup({
     if (!dealRoom) return;
     setSaving(true);
     try {
-      await updateDealRoom(dealRoom.id, { isActive: true });
+      // Re-publish a sanitized snapshot with the room's saved config so rooms
+      // created before the documents opt-in was enforced can be reactivated.
+      const savedConfig = normalizeDealRoomConfig(dealRoom.config);
+      const productionSnapshot = buildDealRoomProductionSnapshot(production, savedConfig);
+      const dealInputsSnapshot = sanitizeDealInputsForDealRoom(dealRoom.dealInputs);
+      await updateDealRoom(dealRoom.id, {
+        isActive: true,
+        config: savedConfig,
+        production: productionSnapshot,
+        dealInputs: dealInputsSnapshot,
+      });
       await updateProduction(production.id, { dealRoomEnabled: true });
       onProductionUpdated({ dealRoomEnabled: true });
-      setDealRoom((prev) => (prev ? { ...prev, isActive: true } : prev));
+      setDealRoom((prev) =>
+        prev
+          ? {
+              ...prev,
+              isActive: true,
+              config: savedConfig,
+              production: productionSnapshot,
+              dealInputs: dealInputsSnapshot,
+            }
+          : prev
+      );
       toast.success("Deal room reactivated. Investors can access the link again.");
     } catch (err) {
       console.error("Failed to reactivate deal room:", err);

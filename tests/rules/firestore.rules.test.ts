@@ -105,6 +105,26 @@ describe("dealRooms read access", () => {
     await assertSucceeds(db().doc("dealRooms/no-such-token").get());
   });
 
+  it("fails closed for non-owners on an active legacy room with unapproved document URLs", async () => {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await ctx.firestore().doc("dealRooms/legacy-active").set(
+        seededRoom({
+          production: { name: "Alice Show", status: "open", operatingAgreementUrl: "https://example.test/oa.pdf" },
+        })
+      );
+      await ctx.firestore().doc("dealRooms/docs-active").set(
+        seededRoom({
+          config: { ...baseConfig, showDocuments: true },
+          production: { name: "Alice Show", status: "open", operatingAgreementUrl: "https://example.test/oa.pdf" },
+        })
+      );
+    });
+    await assertFails(db().doc("dealRooms/legacy-active").get());
+    await assertFails(db("bob").doc("dealRooms/legacy-active").get());
+    await assertSucceeds(db("alice").doc("dealRooms/legacy-active").get());
+    await assertSucceeds(db().doc("dealRooms/docs-active").get());
+  });
+
   it("allows the owner to get their own inactive room", async () => {
     await assertSucceeds(db("alice").doc("dealRooms/inactive-room").get());
   });
@@ -294,6 +314,28 @@ describe("dealRooms update/delete", () => {
       db("alice")
         .doc("dealRooms/legacy-room")
         .update({ isActive: false, updatedAt: firebase.firestore.FieldValue.serverTimestamp() })
+    );
+  });
+
+  it("denies reactivating a legacy room without sanitizing its snapshot", async () => {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await ctx.firestore().doc("dealRooms/legacy-inactive").set(
+        seededRoom({
+          isActive: false,
+          production: { name: "Alice Show", status: "open", operatingAgreementUrl: "https://example.test/oa.pdf" },
+        })
+      );
+    });
+    const ref = db("alice").doc("dealRooms/legacy-inactive");
+    await assertFails(
+      ref.update({ isActive: true, updatedAt: firebase.firestore.FieldValue.serverTimestamp() })
+    );
+    await assertSucceeds(
+      ref.update({
+        isActive: true,
+        production: { name: "Alice Show", status: "open" },
+        updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+      })
     );
   });
 

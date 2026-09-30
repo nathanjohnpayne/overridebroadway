@@ -70,7 +70,7 @@ publicly accessible -- the token IS the access credential.
 - `DealRoomClient` reads `?token=` from the URL and calls `getDealRoom(token)`.
 - Load states: `loading`, `not_found` (no doc / no token), `inactive`
   (`isActive === false`, or the read is denied with `permission-denied` because the room was deactivated), `error`, `ready`.
-- Security rules allow a direct get of an active room (or of a token that does not exist); queries over `dealRooms` are owner-only.
+- Security rules allow a direct get of an active room whose snapshot honors the documents opt-in (or of a token that does not exist); queries over `dealRooms` are owner-only. Rooms saved before the opt-in was enforced read as inactive for investors until the producer saves settings, updates the snapshot, or reactivates (reactivation re-publishes a sanitized snapshot).
 - The share token is never sent to analytics: `deal_room_viewed` logs the production id, and Analytics on `/deal-room` reports `page_location` without the query string and skips the automatic page_view.
 - Each non-ready state renders a branded error card with appropriate messaging.
 
