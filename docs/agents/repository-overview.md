@@ -6,7 +6,7 @@ Override is the financial operating platform for Broadway producers — from mod
 
 **Stack:**
 - Next.js 16.1.6 (App Router, static export)
-- TypeScript 5 (strict)
+- TypeScript 6 (strict; pinned `~6.0` because typescript-eslint 8 supports `<6.1`)
 - Tailwind CSS v4 + shadcn/ui (Radix primitives) + Lucide icons
 - Recharts 3 (charts)
 - react-hook-form (values managed via Controller + watch; zod installed but not used for form validation)

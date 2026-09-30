@@ -8,6 +8,8 @@ import {
   deleteProducerPool,
   ensureDefaultPool,
   assignInvestorsToDefaultPool,
+  DEFAULT_POOL_ID,
+  DEFAULT_POOL_NAME,
 } from "@/lib/firestore";
 import type { ProducerPool } from "@/types/capitalization";
 
@@ -17,6 +19,7 @@ export function useProducerPools(
 ) {
   const [pools, setPools] = useState<ProducerPool[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<Error | null>(null);
   const [defaultPoolId, setDefaultPoolId] = useState<string | null>(null);
   const bootstrapped = useRef(false);
 
@@ -42,13 +45,26 @@ export function useProducerPools(
       return;
     }
     setLoading(true);
-    const unsubscribe = subscribeToProducerPools(productionId, (p) => {
-      setPools(p);
-      setLoading(false);
-      // Keep defaultPoolId in sync with the "Direct Investors" pool id
-      const direct = p.find((pool) => pool.name === "Direct Investors");
-      if (direct) setDefaultPoolId(direct.id);
-    });
+    setError(null);
+    const unsubscribe = subscribeToProducerPools(
+      productionId,
+      (p) => {
+        setPools(p);
+        setError(null);
+        setLoading(false);
+        // Keep defaultPoolId in sync with the "Direct Investors" pool id
+        // (fixed id for new productions, auto id for legacy ones).
+        const direct =
+          p.find((pool) => pool.id === DEFAULT_POOL_ID) ??
+          p.find((pool) => pool.name === DEFAULT_POOL_NAME);
+        if (direct) setDefaultPoolId(direct.id);
+      },
+      (err) => {
+        console.error("Failed to load producer pools:", err);
+        setError(err);
+        setLoading(false);
+      }
+    );
     return unsubscribe;
   }, [productionId]);
 
@@ -79,5 +95,5 @@ export function useProducerPools(
     [productionId]
   );
 
-  return { pools, loading, defaultPoolId, add, update, remove };
+  return { pools, loading, error, defaultPoolId, add, update, remove };
 }

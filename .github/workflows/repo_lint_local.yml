@@ -18,6 +18,37 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  app-checks:
+    name: lint, typecheck, unit tests, build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '24'
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Typecheck
+        run: npx tsc --noEmit
+
+      - name: Unit tests
+        run: npm test
+
+      # Static export; NEXT_PUBLIC_FIREBASE_* are not needed to compile.
+      - name: Build
+        run: npm run build
+
   rules-tests:
     name: firestore/storage rules tests
     runs-on: ubuntu-latest
@@ -40,10 +71,8 @@ jobs:
           distribution: temurin
           java-version: '21'
 
-      # --force: eslint-config-next / eslint-plugin-react declare an eslint
-      # peer range that excludes the eslint 10 this repo pins.
       - name: Install dependencies
-        run: npm ci --force
+        run: npm ci
 
       - name: Run security rules tests against the emulators
         run: npm run test:rules

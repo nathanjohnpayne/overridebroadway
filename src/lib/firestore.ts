@@ -15,7 +15,9 @@ import {
   Unsubscribe,
   Timestamp,
   writeBatch,
+  runTransaction,
   type DocumentReference,
+  type FirestoreError,
 } from "firebase/firestore";
 import { db } from "./firebase";
 import type { Production } from "@/types/production";
@@ -24,11 +26,21 @@ import type { Scenario } from "@/types/model";
 import type { CapitalizationInvestor, ProducerPool } from "@/types/capitalization";
 import type { DealRoom, CreateDealRoomPayload, UpdateDealRoomPayload } from "@/types/dealRoom";
 
+// ─── Listeners ──────────────────────────────────────────────────────────────
+
+// Fallback error handler so a failed listener is never silent.
+function logSnapshotError(label: string) {
+  return (error: FirestoreError) => {
+    console.error(`Firestore listener for ${label} failed:`, error);
+  };
+}
+
 // ─── Productions ────────────────────────────────────────────────────────────
 
 export function subscribeToProductions(
   userId: string,
-  callback: (productions: Production[]) => void
+  callback: (productions: Production[]) => void,
+  onError?: (error: FirestoreError) => void
 ): Unsubscribe {
   const q = query(
     collection(db, "productions"),
@@ -46,7 +58,7 @@ export function subscribeToProductions(
       } as Production;
     });
     callback(productions);
-  });
+  }, onError ?? logSnapshotError("productions"));
 }
 
 export async function getProduction(productionId: string): Promise<Production | null> {
@@ -211,7 +223,8 @@ export async function deleteScenario(
 
 export function subscribeToInvestors(
   productionId: string,
-  callback: (investors: CapitalizationInvestor[]) => void
+  callback: (investors: CapitalizationInvestor[]) => void,
+  onError?: (error: FirestoreError) => void
 ): Unsubscribe {
   const q = query(
     collection(db, "productions", productionId, "investors"),
@@ -228,7 +241,7 @@ export function subscribeToInvestors(
       } as CapitalizationInvestor;
     });
     callback(investors);
-  });
+  }, onError ?? logSnapshotError("investors"));
 }
 
 export async function createInvestor(
@@ -268,7 +281,8 @@ export async function deleteInvestor(
 
 export function subscribeToProducerPools(
   productionId: string,
-  callback: (pools: ProducerPool[]) => void
+  callback: (pools: ProducerPool[]) => void,
+  onError?: (error: FirestoreError) => void
 ): Unsubscribe {
   const q = query(
     collection(db, "productions", productionId, "producerPools"),
@@ -285,7 +299,7 @@ export function subscribeToProducerPools(
       } as ProducerPool;
     });
     callback(pools);
-  });
+  }, onError ?? logSnapshotError("producerPools"));
 }
 
 export async function createProducerPool(
@@ -321,6 +335,15 @@ export async function deleteProducerPool(
   await deleteDoc(doc(db, "productions", productionId, "producerPools", poolId));
 }
 
+/**
+ * Fixed document id for the "Direct Investors" default pool. A deterministic
+ * id makes creation idempotent: concurrent bootstraps (two tabs, React
+ * StrictMode double effects) converge on one document instead of racing to
+ * create duplicates.
+ */
+export const DEFAULT_POOL_ID = "direct";
+export const DEFAULT_POOL_NAME = "Direct Investors";
+
 // Lazy migration: ensure a "Direct Investors" default pool exists and
 // assign any legacy investors (no producerPoolId) to it.
 export async function ensureDefaultPool(
@@ -331,13 +354,29 @@ export async function ensureDefaultPool(
     collection(db, "productions", productionId, "producerPools")
   );
   if (!snap.empty) {
-    const defaultPool = snap.docs.find((d) => d.data().name === "Direct Investors");
+    // Legacy productions created their default pool with an auto-generated
+    // id; keep using it so existing investor assignments stay valid.
+    const defaultPool =
+      snap.docs.find((d) => d.id === DEFAULT_POOL_ID) ??
+      snap.docs.find((d) => d.data().name === DEFAULT_POOL_NAME);
     return defaultPool?.id ?? snap.docs[0].id;
   }
-  return createProducerPool(productionId, {
-    productionId,
-    ownerUserId,
-    name: "Direct Investors",
+  return runTransaction(db, async (tx) => {
+    const ref = doc(db, "productions", productionId, "producerPools", DEFAULT_POOL_ID);
+    const existing = await tx.get(ref);
+    if (!existing.exists()) {
+      tx.set(
+        ref,
+        stripUndefined({
+          productionId,
+          ownerUserId,
+          name: DEFAULT_POOL_NAME,
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+        })
+      );
+    }
+    return DEFAULT_POOL_ID;
   });
 }
 

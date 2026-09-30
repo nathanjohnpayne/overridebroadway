@@ -15,6 +15,18 @@ updates:
       interval: "weekly"
       day: "monday"
     open-pull-requests-limit: 5
+    ignore:
+      # typescript-eslint 8.x supports TypeScript >=4.8.4 <6.1.0; a TS 7
+      # bump breaks `npm run lint`. Lift once typescript-eslint supports it.
+      - dependency-name: "typescript"
+        versions: [">=6.1.0"]
+      # eslint-plugin-react 7.37.x crashes under eslint 10 (settings.react
+      # version "detect" calls the removed context.getFilename()). Lift
+      # once eslint-plugin-react ships eslint 10 support.
+      - dependency-name: "eslint"
+        versions: [">=10.0.0"]
+      - dependency-name: "@eslint/js"
+        versions: [">=10.0.0"]
     groups:
       dev-dependencies:
         dependency-type: "development"

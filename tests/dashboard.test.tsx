@@ -47,16 +47,17 @@ vi.mock("@/lib/firestore", () => ({
   subscribeToProductions: vi.fn(),
 }));
 
-// Mock useProductions hook
 const mockDeleteProductionFiles = vi.fn();
 vi.mock("@/lib/storage", () => ({
   deleteProductionFiles: (...args: unknown[]) => mockDeleteProductionFiles(...args),
 }));
 
+// Mock useProductions hook
 const mockProductions: Production[] = [];
 let mockLoading = false;
+let mockError: Error | null = null;
 vi.mock("@/hooks/useProductions", () => ({
-  useProductions: () => ({ productions: mockProductions, loading: mockLoading }),
+  useProductions: () => ({ productions: mockProductions, loading: mockLoading, error: mockError }),
 }));
 
 // Mock useAuth
@@ -110,6 +111,7 @@ beforeEach(() => {
   // Reset module-level state by reassigning mockProductions contents
   mockProductions.length = 0;
   mockLoading = false;
+  mockError = null;
   mockUseSearchParams.mockReturnValue(new URLSearchParams());
 });
 
@@ -126,6 +128,17 @@ describe("DashboardPage", () => {
       expect(skeletons.length).toBeGreaterThan(0);
       // We should see placeholder content (no production cards)
       expect(screen.queryByText("Hamilton")).not.toBeInTheDocument();
+    });
+  });
+
+  describe("load error", () => {
+    it("shows an error instead of the empty state when the listener fails", () => {
+      mockError = new Error("permission-denied");
+
+      render(<DashboardPage />);
+
+      expect(screen.getByRole("alert")).toHaveTextContent(/couldn.t load your productions/i);
+      expect(screen.queryByText("No productions yet")).not.toBeInTheDocument();
     });
   });
 

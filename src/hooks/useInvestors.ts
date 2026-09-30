@@ -12,6 +12,7 @@ import type { CapitalizationInvestor } from "@/types/capitalization";
 export function useInvestors(productionId: string | null) {
   const [investors, setInvestors] = useState<CapitalizationInvestor[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<Error | null>(null);
 
   useEffect(() => {
     if (!productionId) {
@@ -20,10 +21,20 @@ export function useInvestors(productionId: string | null) {
       return;
     }
     setLoading(true);
-    const unsubscribe = subscribeToInvestors(productionId, (inv) => {
-      setInvestors(inv);
-      setLoading(false);
-    });
+    setError(null);
+    const unsubscribe = subscribeToInvestors(
+      productionId,
+      (inv) => {
+        setInvestors(inv);
+        setError(null);
+        setLoading(false);
+      },
+      (err) => {
+        console.error("Failed to load investors:", err);
+        setError(err);
+        setLoading(false);
+      }
+    );
     return unsubscribe;
   }, [productionId]);
 
@@ -56,5 +67,5 @@ export function useInvestors(productionId: string | null) {
     [productionId]
   );
 
-  return { investors, loading, add, update, remove };
+  return { investors, loading, error, add, update, remove };
 }
