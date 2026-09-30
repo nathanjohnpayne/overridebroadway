@@ -10,6 +10,7 @@
     "start": "next start",
     "lint": "eslint --config eslint.local.config.js --ignore-pattern 'out/**'",
     "test": "vitest run",
+    "test:rules": "npx --yes firebase-tools@15.32.0 emulators:exec --only firestore,storage --project demo-overridebroadway \"vitest run --config vitest.rules.config.ts\"",
     "deploy": "op-firebase-deploy",
     "deploy:hosting": "op-firebase-deploy --only hosting"
   },
@@ -37,6 +38,7 @@
   },
   "devDependencies": {
     "@eslint/js": "^10",
+    "@firebase/rules-unit-testing": "^5.0.2",
     "@tailwindcss/postcss": "^4",
     "@testing-library/jest-dom": "^7.0.1",
     "@testing-library/react": "^16.3.3",

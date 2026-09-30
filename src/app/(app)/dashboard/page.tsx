@@ -6,6 +6,7 @@ import Image from "next/image";
 import { useProductions } from "@/hooks/useProductions";
 import { useAuth } from "@/contexts/AuthContext";
 import { createProduction, deleteProduction } from "@/lib/firestore";
+import { deleteProductionFiles } from "@/lib/storage";
 import { Analytics } from "@/lib/analytics";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
@@ -83,10 +84,16 @@ export default function DashboardPage() {
   const displayedProductions = dashView === "productions" ? productions : investmentProductions;
 
   async function handleDelete() {
-    if (!deleteTarget) return;
+    if (!deleteTarget || !user) return;
     setDeleting(true);
     try {
-      await deleteProduction(deleteTarget.id);
+      await deleteProduction(deleteTarget.id, user.uid);
+      // Uploaded files are cleaned up best-effort; a failure here must not
+      // report the (already completed) production delete as failed.
+      const failedFiles = await deleteProductionFiles(user.uid, deleteTarget.id);
+      if (failedFiles !== 0) {
+        console.warn(`Production ${deleteTarget.id} deleted; some uploaded files could not be removed.`);
+      }
       toast.success(`"${deleteTarget.name}" deleted.`);
       setDeleteTarget(null);
     } catch {

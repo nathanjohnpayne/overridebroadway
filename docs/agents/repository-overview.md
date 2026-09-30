@@ -112,12 +112,15 @@ dealRooms/{token}                 # top-level collection; token = document ID = 
 ```
 
 **Security rules:**
-- Productions and subcollections: `request.auth.uid == resource.data.userId`
-- Deal rooms: public read when `isActive == true`; writes require ownership
+- Productions and subcollections: `request.auth.uid == resource.data.userId`; `userId` is immutable on update
+- Deal rooms: public `get` by token when `isActive == true`; the owner can always `get`; `list`/queries are owner-only. Create requires owning the referenced production and a validated shape (key allowlist, `producerNote` ≤ 500, no individual investors); `ownedByUserId`, `productionId` and `createdAt` are immutable
+- Storage: owner-only under `productions/{uid}/…`; writes limited to PDF or PNG/JPEG/WebP/GIF, ≤ 20MB
+- Rules tests: `npm run test:rules` (Firestore + Storage emulators via `firebase emulators:exec`; needs Java). CI runs them in `.github/workflows/repo_lint_local.yml`
 
 **Composite indexes** (`firestore.indexes.json`):
 - `productions`: userId ASC + updatedAt DESC; userId ASC + createdAt DESC; userId ASC + status ASC + createdAt DESC
 - `scenarios`: productionId ASC + createdAt DESC
+- `dealRooms`: productionId ASC + ownedByUserId ASC + createdAt DESC
 
 ### Firebase Project
 

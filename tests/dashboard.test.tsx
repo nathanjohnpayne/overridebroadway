@@ -47,6 +47,11 @@ vi.mock("@/lib/firestore", () => ({
 }));
 
 // Mock useProductions hook
+const mockDeleteProductionFiles = vi.fn();
+vi.mock("@/lib/storage", () => ({
+  deleteProductionFiles: (...args: unknown[]) => mockDeleteProductionFiles(...args),
+}));
+
 const mockProductions: Production[] = [];
 let mockLoading = false;
 vi.mock("@/hooks/useProductions", () => ({
@@ -301,6 +306,7 @@ describe("DashboardPage", () => {
     it("calls deleteProduction when confirmed", async () => {
       const user = userEvent.setup();
       mockDeleteProduction.mockResolvedValue(undefined);
+      mockDeleteProductionFiles.mockResolvedValue(0);
       mockProductions.push(makeProduction({ id: "del-1", name: "Doomed Show" }));
       mockLoading = false;
 
@@ -332,7 +338,8 @@ describe("DashboardPage", () => {
       await user.click(screen.getByRole("button", { name: /^delete$/i }));
 
       await waitFor(() => {
-        expect(mockDeleteProduction).toHaveBeenCalledWith("del-1");
+        expect(mockDeleteProduction).toHaveBeenCalledWith("del-1", "user-1");
+        expect(mockDeleteProductionFiles).toHaveBeenCalledWith("user-1", "del-1");
       });
     });
   });

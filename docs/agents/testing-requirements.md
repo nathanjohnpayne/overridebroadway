@@ -2,7 +2,9 @@
 
 - Run `npm run build` after code changes — static export must succeed.
 - Run `npm run lint` — no ESLint errors.
-- There is no automated unit test suite. When modifying financial calculations, test manually:
+- Run `npm test` (Vitest, `tests/*.test.tsx`).
+- Changes to `firestore.rules` or `storage.rules` need a deny case and an allow case in `tests/rules/`. Run them with `npm run test:rules` (starts the Firestore and Storage emulators; requires Java 11+). CI runs them in `.github/workflows/repo_lint_local.yml`.
+- When modifying financial calculations, also test manually:
   1. Create a test production in the app
   2. Verify deal inputs save and reload correctly via Firestore
   3. Verify the financial model renders expected outputs for known inputs

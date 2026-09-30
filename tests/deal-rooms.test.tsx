@@ -84,6 +84,7 @@ vi.mock("firebase/storage", () => ({
 
 vi.mock("firebase/analytics", () => ({
   getAnalytics: vi.fn(),
+  initializeAnalytics: vi.fn(),
   isSupported: vi.fn(() => Promise.resolve(false)),
 }));
 
@@ -95,6 +96,14 @@ vi.mock("firebase/app", () => ({
 
 // Import after mocks
 import DealRoomClient from "@/app/deal-room/DealRoomClient";
+import { Analytics } from "@/lib/analytics";
+import {
+  buildDealRoomProductionSnapshot,
+  normalizeDealRoomConfig,
+  sanitizeDealInputsForDealRoom,
+} from "@/lib/dealRoomSnapshot";
+import { analyticsSettingsForLocation } from "@/lib/analyticsConfig";
+import type { Production } from "@/types/production";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -177,6 +186,25 @@ describe("DealRoomClient", () => {
     });
   });
 
+  describe("deactivated deal room (read denied by rules)", () => {
+    it("shows 'This deal room is no longer active' on permission-denied", async () => {
+      mockSearchParams = new URLSearchParams("token=deactivated-token");
+      mockGetDealRoom.mockRejectedValue(
+        Object.assign(new Error("Missing or insufficient permissions."), {
+          code: "permission-denied",
+        }),
+      );
+
+      render(<DealRoomClient />);
+
+      await waitFor(() => {
+        expect(
+          screen.getByText("This deal room is no longer active"),
+        ).toBeInTheDocument();
+      });
+    });
+  });
+
   describe("error state", () => {
     it("shows error message when getDealRoom throws", async () => {
       mockSearchParams = new URLSearchParams("token=error-token");
@@ -213,6 +241,19 @@ describe("DealRoomClient", () => {
       await waitFor(() => {
         expect(screen.getByText("Hamilton")).toBeInTheDocument();
       });
+    });
+
+    it("logs the production id to analytics, never the share token", async () => {
+      const dealRoom = makeDealRoom();
+      mockSearchParams = new URLSearchParams("token=token-abc-123");
+      mockGetDealRoom.mockResolvedValue(dealRoom);
+
+      render(<DealRoomClient />);
+
+      await waitFor(() => {
+        expect(Analytics.dealRoomViewed).toHaveBeenCalledWith("prod-1");
+      });
+      expect(Analytics.dealRoomViewed).not.toHaveBeenCalledWith("token-abc-123");
     });
   });
 });
@@ -498,5 +539,101 @@ describe("DEFAULT_DEAL_ROOM_CONFIG", () => {
 
   it("has empty producer note by default", () => {
     expect(DEFAULT_DEAL_ROOM_CONFIG.producerNote).toBe("");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Tests: published snapshot (what lands in the public dealRooms document)
+// ---------------------------------------------------------------------------
+
+describe("deal room snapshot builders", () => {
+  const production: Production = {
+    id: "prod-1",
+    userId: "user-1",
+    name: "Hamilton",
+    subtitle: "An American Musical",
+    status: "open",
+    artworkUrl: "https://example.com/art.jpg",
+    operatingAgreementUrl: "https://example.com/oa.pdf",
+    operatingAgreementName: "oa.pdf",
+    subscriptionAgreementUrl: "https://example.com/sub.pdf",
+    dealRoomToken: "secret-token",
+    createdAt: new Date("2025-06-01"),
+    updatedAt: new Date("2025-06-01"),
+  };
+
+  it("omits document URLs and names unless showDocuments is on", () => {
+    const hidden = buildDealRoomProductionSnapshot(production, { showDocuments: false });
+    expect(hidden).toEqual({
+      name: "Hamilton",
+      subtitle: "An American Musical",
+      status: "open",
+      artworkUrl: "https://example.com/art.jpg",
+    });
+
+    const shown = buildDealRoomProductionSnapshot(production, { showDocuments: true });
+    expect(shown.operatingAgreementUrl).toBe("https://example.com/oa.pdf");
+    expect(shown.operatingAgreementName).toBe("oa.pdf");
+    expect(shown.subscriptionAgreementUrl).toBe("https://example.com/sub.pdf");
+    expect(Object.values(shown)).not.toContain(undefined);
+  });
+
+  it("never copies production fields outside the snapshot shape", () => {
+    const snap = buildDealRoomProductionSnapshot(production, { showDocuments: true });
+    expect(snap).not.toHaveProperty("userId");
+    expect(snap).not.toHaveProperty("dealRoomToken");
+    expect(snap).not.toHaveProperty("id");
+  });
+
+  it("strips investors and non-model fields from deal inputs", () => {
+    const loaded = {
+      ...DEFAULT_DEAL_INPUTS,
+      id: "primary",
+      investors: [{ id: "i1", name: "Jane Investor", amount: 50000, units: 2 }],
+      updatedAt: { seconds: 1 },
+    } as unknown as DealInputs;
+
+    const published = sanitizeDealInputsForDealRoom(loaded);
+    expect(published.investors).toEqual([]);
+    expect(published).not.toHaveProperty("id");
+    expect(published).not.toHaveProperty("updatedAt");
+    expect(Object.values(published)).not.toContain(undefined);
+    // Every model parameter is preserved (the view computes scenarios and
+    // breakeven from them).
+    expect(published).toEqual(
+      JSON.parse(JSON.stringify({ ...DEFAULT_DEAL_INPUTS, investors: [] })),
+    );
+  });
+
+  it("clamps the producer note to 500 characters", () => {
+    const config = normalizeDealRoomConfig({
+      ...DEFAULT_DEAL_ROOM_CONFIG,
+      producerNote: "x".repeat(600),
+    });
+    expect(config.producerNote).toHaveLength(500);
+  });
+});
+
+describe("analyticsSettingsForLocation", () => {
+  it("strips the query string and disables auto page_view on /deal-room", () => {
+    expect(
+      analyticsSettingsForLocation({ origin: "https://example.com", pathname: "/deal-room" }),
+    ).toEqual({
+      config: { page_location: "https://example.com/deal-room", send_page_view: false },
+    });
+    expect(
+      analyticsSettingsForLocation({ origin: "https://example.com", pathname: "/deal-room/" }),
+    ).toEqual({
+      config: { page_location: "https://example.com/deal-room/", send_page_view: false },
+    });
+  });
+
+  it("leaves other routes on default settings", () => {
+    expect(
+      analyticsSettingsForLocation({ origin: "https://example.com", pathname: "/dashboard" }),
+    ).toEqual({});
+    expect(
+      analyticsSettingsForLocation({ origin: "https://example.com", pathname: "/deal-rooms-info" }),
+    ).toEqual({});
   });
 });

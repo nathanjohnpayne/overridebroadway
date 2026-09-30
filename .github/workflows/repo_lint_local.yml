@@ -1,0 +1,49 @@
+# repo_lint_local.yml — consumer-local CI annex (never propagated by the hub).
+#
+# The hub-owned repo_lint.yml covers fleet policy checks only. App-specific
+# checks for this repository live here; agent-review.yml and
+# codex-review-check.sh observe this annex's check runs (#655).
+name: repo-lint-local
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: repo-lint-local-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  rules-tests:
+    name: firestore/storage rules tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '24'
+          cache: npm
+
+      # The Firestore and Storage emulators run on the JVM.
+      - name: Set up Java
+        uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      # --force: eslint-config-next / eslint-plugin-react declare an eslint
+      # peer range that excludes the eslint 10 this repo pins.
+      - name: Install dependencies
+        run: npm ci --force
+
+      - name: Run security rules tests against the emulators
+        run: npm run test:rules

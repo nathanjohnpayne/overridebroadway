@@ -44,6 +44,11 @@ import {
   updateProduction,
 } from "@/lib/firestore";
 import { Analytics } from "@/lib/analytics";
+import {
+  buildDealRoomProductionSnapshot,
+  normalizeDealRoomConfig,
+  sanitizeDealInputsForDealRoom,
+} from "@/lib/dealRoomSnapshot";
 import { DEFAULT_DEAL_ROOM_CONFIG } from "@/types/dealRoom";
 import type { DealRoomConfig, DealRoom } from "@/types/dealRoom";
 import type { DealInputs } from "@/types/deal";
@@ -171,28 +176,15 @@ export function DealRoomSetup({
     }
 
     setCreating(true);
+    const publishedConfig = normalizeDealRoomConfig(config);
     try {
       const token = await createDealRoom({
         productionId: production.id,
         ownedByUserId: userId,
-        production: {
-          name: production.name,
-          subtitle: production.subtitle,
-          venue: production.venue,
-          status: production.status,
-          artworkUrl: production.artworkUrl,
-          showUrl: production.showUrl,
-          investorInstructionLetterUrl: production.investorInstructionLetterUrl,
-          memberSignaturePageUrl: production.memberSignaturePageUrl,
-          subscriptionAgreementUrl: production.subscriptionAgreementUrl,
-          operatingAgreementUrl: production.operatingAgreementUrl,
-          investorInstructionLetterName: production.investorInstructionLetterName,
-          memberSignaturePageName: production.memberSignaturePageName,
-          subscriptionAgreementName: production.subscriptionAgreementName,
-          operatingAgreementName: production.operatingAgreementName,
-        },
-        dealInputs,
-        config,
+        // Only publish what the producer opted into — see dealRoomSnapshot.ts.
+        production: buildDealRoomProductionSnapshot(production, publishedConfig),
+        dealInputs: sanitizeDealInputsForDealRoom(dealInputs),
+        config: publishedConfig,
         isActive: true,
       });
 
@@ -222,9 +214,30 @@ export function DealRoomSetup({
   async function handleSaveConfig() {
     if (!dealRoom) return;
     setSaving(true);
+    const publishedConfig = normalizeDealRoomConfig(config);
     try {
-      await updateDealRoom(dealRoom.id, { config });
-      setDealRoom((prev) => (prev ? { ...prev, config } : prev));
+      // Re-snapshot published metadata so the document URLs follow the
+      // showDocuments toggle, and re-sanitize the existing deal-input
+      // snapshot (older rooms may carry fields that are no longer published).
+      // The deal-input values themselves are unchanged — "Update Snapshot"
+      // remains the explicit way to publish newer deal inputs.
+      const productionSnapshot = buildDealRoomProductionSnapshot(production, publishedConfig);
+      const dealInputsSnapshot = sanitizeDealInputsForDealRoom(dealRoom.dealInputs);
+      await updateDealRoom(dealRoom.id, {
+        config: publishedConfig,
+        production: productionSnapshot,
+        dealInputs: dealInputsSnapshot,
+      });
+      setDealRoom((prev) =>
+        prev
+          ? {
+              ...prev,
+              config: publishedConfig,
+              production: productionSnapshot,
+              dealInputs: dealInputsSnapshot,
+            }
+          : prev
+      );
       Analytics.dealRoomUpdated(production.id);
       toast.success("Deal room settings saved.");
     } catch (err) {
@@ -239,29 +252,25 @@ export function DealRoomSetup({
   async function handleRefreshSnapshot() {
     if (!dealRoom || !dealInputs) return;
     setRefreshing(true);
+    const publishedConfig = normalizeDealRoomConfig(config);
     try {
+      const productionSnapshot = buildDealRoomProductionSnapshot(production, publishedConfig);
+      const dealInputsSnapshot = sanitizeDealInputsForDealRoom(dealInputs);
       await updateDealRoom(dealRoom.id, {
-        dealInputs,
-        production: {
-          name: production.name,
-          subtitle: production.subtitle,
-          venue: production.venue,
-          status: production.status,
-          artworkUrl: production.artworkUrl,
-          showUrl: production.showUrl,
-          investorInstructionLetterUrl: production.investorInstructionLetterUrl,
-          memberSignaturePageUrl: production.memberSignaturePageUrl,
-          subscriptionAgreementUrl: production.subscriptionAgreementUrl,
-          operatingAgreementUrl: production.operatingAgreementUrl,
-          investorInstructionLetterName: production.investorInstructionLetterName,
-          memberSignaturePageName: production.memberSignaturePageName,
-          subscriptionAgreementName: production.subscriptionAgreementName,
-          operatingAgreementName: production.operatingAgreementName,
-        },
-        config,
+        dealInputs: dealInputsSnapshot,
+        production: productionSnapshot,
+        config: publishedConfig,
       });
       setDealRoom((prev) =>
-        prev ? { ...prev, dealInputs: dealInputs!, config, updatedAt: new Date() } : prev
+        prev
+          ? {
+              ...prev,
+              dealInputs: dealInputsSnapshot,
+              production: productionSnapshot,
+              config: publishedConfig,
+              updatedAt: new Date(),
+            }
+          : prev
       );
       Analytics.dealRoomUpdated(production.id);
       toast.success("Deal room updated with latest deal structure.");

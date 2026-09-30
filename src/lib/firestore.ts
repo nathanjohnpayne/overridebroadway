@@ -14,6 +14,8 @@ import {
   onSnapshot,
   Unsubscribe,
   Timestamp,
+  writeBatch,
+  type DocumentReference,
 } from "firebase/firestore";
 import { db } from "./firebase";
 import type { Production } from "@/types/production";
@@ -81,7 +83,57 @@ export async function updateProduction(
   await updateDoc(ref, { ...data, updatedAt: serverTimestamp() });
 }
 
-export async function deleteProduction(productionId: string): Promise<void> {
+/** Subcollections stored under productions/{productionId}. */
+const PRODUCTION_SUBCOLLECTIONS = [
+  "dealInputs",
+  "scenarios",
+  "investors",
+  "producerPools",
+] as const;
+
+/** Firestore caps a batched write at 500 operations. */
+const MAX_BATCH_OPS = 500;
+
+async function deleteRefsInBatches(refs: DocumentReference[]): Promise<void> {
+  for (let i = 0; i < refs.length; i += MAX_BATCH_OPS) {
+    const batch = writeBatch(db);
+    for (const ref of refs.slice(i, i + MAX_BATCH_OPS)) batch.delete(ref);
+    await batch.commit();
+  }
+}
+
+/**
+ * Deletes a production and everything that hangs off it.
+ *
+ * Order matters:
+ *  1. Deal rooms first, so public share links stop resolving even if a later
+ *     step fails.
+ *  2. Subcollections next — their security rules check ownership by reading
+ *     the parent production, so they must go before the parent document.
+ *  3. The production document last.
+ *
+ * Uploaded files under productions/{ownerUserId}/{productionId}/ are removed
+ * by the caller via `deleteProductionFiles` (storage.ts) — best effort, since
+ * orphaned files are not reachable without their download URLs.
+ */
+export async function deleteProduction(
+  productionId: string,
+  ownerUserId: string
+): Promise<void> {
+  const dealRoomSnap = await getDocs(
+    query(
+      collection(db, "dealRooms"),
+      where("productionId", "==", productionId),
+      where("ownedByUserId", "==", ownerUserId)
+    )
+  );
+  await deleteRefsInBatches(dealRoomSnap.docs.map((d) => d.ref));
+
+  for (const sub of PRODUCTION_SUBCOLLECTIONS) {
+    const snap = await getDocs(collection(db, "productions", productionId, sub));
+    await deleteRefsInBatches(snap.docs.map((d) => d.ref));
+  }
+
   await deleteDoc(doc(db, "productions", productionId));
 }
 
@@ -342,7 +394,11 @@ export async function createDealRoom(
 
 /**
  * Fetches a deal room by token (document ID).
- * Returns null if the document doesn't exist or is inactive.
+ * Returns null if the document doesn't exist.
+ *
+ * Security rules allow the read when the room is active or the caller owns
+ * it; otherwise the read rejects with `permission-denied` (for investors,
+ * that means the producer deactivated the link).
  * NOTE: This function can be called without auth — used by the investor-facing route.
  */
 export async function getDealRoom(token: string): Promise<DealRoom | null> {
@@ -366,7 +422,8 @@ export async function updateDealRoom(
 
 /**
  * Deactivates a deal room — sets isActive = false.
- * The URL will stop working immediately (Firestore rule blocks read when isActive = false).
+ * The URL stops working immediately for everyone except the owner
+ * (Firestore rules only allow non-owners to read active rooms).
  */
 export async function deactivateDealRoom(token: string): Promise<void> {
   await updateDealRoom(token, { isActive: false });
