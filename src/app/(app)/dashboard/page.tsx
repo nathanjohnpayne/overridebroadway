@@ -6,6 +6,7 @@ import Image from "next/image";
 import { useProductions } from "@/hooks/useProductions";
 import { useAuth } from "@/contexts/AuthContext";
 import { createProduction, deleteProduction } from "@/lib/firestore";
+import { deleteProductionFiles } from "@/lib/storage";
 import { Analytics } from "@/lib/analytics";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
@@ -83,14 +84,28 @@ export default function DashboardPage() {
   const displayedProductions = dashView === "productions" ? productions : investmentProductions;
 
   async function handleDelete() {
-    if (!deleteTarget) return;
+    if (!deleteTarget || !user) return;
     setDeleting(true);
     try {
-      await deleteProduction(deleteTarget.id);
-      toast.success(`"${deleteTarget.name}" deleted.`);
+      await deleteProduction(deleteTarget.id, user.uid);
+      // Uploaded files are cleaned up best-effort; a failure here must not
+      // report the (already completed) production delete as failed.
+      const failedFiles = await deleteProductionFiles(user.uid, deleteTarget.id);
+      if (failedFiles === 0) {
+        toast.success(`"${deleteTarget.name}" deleted.`);
+      } else {
+        console.warn(
+          failedFiles < 0
+            ? `Production ${deleteTarget.id} deleted; uploaded files could not be listed for cleanup.`
+            : `Production ${deleteTarget.id} deleted; ${failedFiles} uploaded file(s) could not be removed.`
+        );
+        toast.warning(`"${deleteTarget.name}" deleted, but some uploaded files could not be removed.`);
+      }
       setDeleteTarget(null);
     } catch {
-      toast.error("Failed to delete production.");
+      // deleteProduction is safe to re-run: each step only deletes what is
+      // still there, so a retry resumes an interrupted delete.
+      toast.error("Couldn't finish deleting this production. Please try again.");
     } finally {
       setDeleting(false);
     }

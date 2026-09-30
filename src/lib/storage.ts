@@ -3,8 +3,21 @@ import {
   uploadBytesResumable,
   getDownloadURL,
   deleteObject,
+  listAll,
+  type StorageReference,
 } from "firebase/storage";
 import { storage } from "./firebase";
+
+/**
+ * Image types accepted for production artwork. storage.rules enforces the
+ * same content-type allowlist (plus application/pdf) and a 20MB ceiling.
+ */
+export const ARTWORK_CONTENT_TYPES: readonly string[] = [
+  "image/png",
+  "image/jpeg",
+  "image/webp",
+  "image/gif",
+];
 
 export async function uploadProductionArtwork(
   userId: string,
@@ -12,7 +25,8 @@ export async function uploadProductionArtwork(
   file: File,
   onProgress?: (percent: number) => void
 ): Promise<string> {
-  if (!file.type.startsWith("image/")) throw new Error("File must be an image");
+  if (!ARTWORK_CONTENT_TYPES.includes(file.type))
+    throw new Error("Image must be PNG, JPEG, WebP, or GIF");
   if (file.size > 5 * 1024 * 1024) throw new Error("Image must be under 5MB");
 
   const storageRef = ref(
@@ -156,4 +170,29 @@ export async function uploadInvestorDocument(
 export async function deleteFile(path: string): Promise<void> {
   const storageRef = ref(storage, path);
   await deleteObject(storageRef);
+}
+
+async function collectFiles(dir: StorageReference): Promise<StorageReference[]> {
+  const res = await listAll(dir);
+  const nested = await Promise.all(res.prefixes.map((p) => collectFiles(p)));
+  return [...res.items, ...nested.flat()];
+}
+
+/**
+ * Best-effort removal of every file uploaded for a production
+ * (productions/{userId}/{productionId}/**). Returns the number of files that
+ * could not be deleted; never throws.
+ */
+export async function deleteProductionFiles(
+  userId: string,
+  productionId: string
+): Promise<number> {
+  try {
+    const files = await collectFiles(ref(storage, `productions/${userId}/${productionId}`));
+    const results = await Promise.allSettled(files.map((f) => deleteObject(f)));
+    return results.filter((r) => r.status === "rejected").length;
+  } catch (err) {
+    console.error("Failed to list production files for cleanup:", err);
+    return -1;
+  }
 }

@@ -153,7 +153,7 @@ productions/{userId}/{productionId}/
 - Always call `stripUndefined()` before `setDoc`
 - Zustand persist key changed from `"broadway-deal-draft"` to `"deal-builder-ui"` — old key is defunct
 - Deal room documents are in the **top-level** `dealRooms` collection, not a subcollection of productions
-- `deleteProduction()` only deletes the root production document — subcollections and Storage files are not cascade-deleted (known gap)
+- `deleteProduction(productionId, ownerUserId)` deletes the production's deal rooms, then its `dealInputs` / `scenarios` / `investors` / `producerPools` subcollections, then the root document; it is safe to re-run after a partial failure. The dashboard then removes Storage files under `productions/{uid}/{id}/` best effort. **Known gap:** the production stays writable until its root document is deleted, so a write from another open tab after a subcollection was enumerated can leave an orphaned child document once the root is gone; re-running cannot remove it, because subcollection rules require the parent. Closing this needs a `deleting` marker enforced in rules or a server-side recursive delete
 
 **UI:**
 - Recharts Tooltip `formatter` props use `unknown` types — cast with `Number(v)` and `String(name)`

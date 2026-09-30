@@ -711,7 +711,7 @@ export default function ProductionHubClient() {
               >
                 <ImageIcon className="h-3 w-3" />
               </button>
-              <input ref={artworkRef} type="file" accept="image/*" className="hidden" onChange={handleArtworkUpload} />
+              <input ref={artworkRef} type="file" accept="image/png,image/jpeg,image/webp,image/gif" className="hidden" onChange={handleArtworkUpload} />
               {artworkProgress !== null && <Progress value={artworkProgress} className="h-1 mt-1" />}
             </div>
 

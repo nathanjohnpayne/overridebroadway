@@ -7,10 +7,14 @@ service cloud.firestore {
       allow read, write: if request.auth != null && request.auth.uid == userId;
     }
 
-    // Productions — users can only access their own productions
+    // Productions — users can only access their own productions.
+    // Ownership (userId) is immutable after create.
     match /productions/{productionId} {
-      allow read, update, delete: if request.auth != null
+      allow read, delete: if request.auth != null
         && resource.data.userId == request.auth.uid;
+      allow update: if request.auth != null
+        && resource.data.userId == request.auth.uid
+        && request.resource.data.userId == resource.data.userId;
       allow create: if request.auth != null
         && request.resource.data.userId == request.auth.uid;
 
@@ -43,15 +47,124 @@ service cloud.firestore {
       }
     }
 
-    // Deal Rooms — publicly readable when active; only the owner can write
-    // The share token IS the document ID. Knowing the token grants read access.
-    // No individual investor data is stored here — only deal economics snapshots.
+    // Deal Rooms — the share token IS the document ID; knowing the token
+    // grants read access to an ACTIVE room. Only aggregate deal economics are
+    // stored here (see src/lib/dealRoomSnapshot.ts) — never investor data.
     match /dealRooms/{token} {
-      allow read: if resource.data.isActive == true;
+      function isDealRoomOwner() {
+        return request.auth != null
+          && resource.data.ownedByUserId == request.auth.uid;
+      }
+
+      function ownsProduction(productionId) {
+        return exists(/databases/$(database)/documents/productions/$(productionId))
+          && get(/databases/$(database)/documents/productions/$(productionId)).data.userId
+          == request.auth.uid;
+      }
+
+      function validConfig(config) {
+        return config is map
+          && config.keys().hasOnly([
+            'showFinancialModel', 'showWaterfall', 'showCapitalizationProgress',
+            'showDocuments', 'showWeeklyBreakdown', 'producerNote'])
+          && config.get('showFinancialModel', false) is bool
+          && config.get('showWaterfall', false) is bool
+          && config.get('showCapitalizationProgress', false) is bool
+          && config.get('showDocuments', false) is bool
+          && config.get('showWeeklyBreakdown', false) is bool
+          && config.get('producerNote', '') is string
+          && config.get('producerNote', '').size() <= 500;
+      }
+
+      function validProductionSnapshot(p) {
+        return p is map
+          && p.keys().hasOnly([
+            'name', 'subtitle', 'venue', 'status', 'artworkUrl', 'showUrl',
+            'investorInstructionLetterUrl', 'investorInstructionLetterName',
+            'memberSignaturePageUrl', 'memberSignaturePageName',
+            'subscriptionAgreementUrl', 'subscriptionAgreementName',
+            'operatingAgreementUrl', 'operatingAgreementName'])
+          && p.name is string;
+      }
+
+      // Document URLs/names may only be published when the room's config
+      // opts in (showDocuments == true).
+      function documentsMatchConfig(room) {
+        return room.config.get('showDocuments', false) == true
+          || !room.production.keys().hasAny([
+            'investorInstructionLetterUrl', 'investorInstructionLetterName',
+            'memberSignaturePageUrl', 'memberSignaturePageName',
+            'subscriptionAgreementUrl', 'subscriptionAgreementName',
+            'operatingAgreementUrl', 'operatingAgreementName']);
+      }
+
+      // Individual investors are never published: the legacy investors
+      // array must be absent or empty.
+      function validDealInputs(d) {
+        return d is map
+          && (!('investors' in d) || (d.investors is list && d.investors.size() == 0));
+      }
+
+      // What a room must satisfy to be served to non-owners.
+      function publishable(room) {
+        return documentsMatchConfig(room) && validDealInputs(room.dealInputs);
+      }
+
+      // A direct get by token: allowed for active rooms whose snapshot honors
+      // the documents opt-in and carries no individual investors, and always
+      // for the owner. Rooms written before
+      // that was enforced fail closed for non-owners until re-saved.
+      // A get of a token that does not exist is allowed (returns "not found")
+      // so the investor view can tell a bad link from a deactivated one.
+      allow get: if resource == null
+        || (resource.data.isActive == true && publishable(resource.data))
+        || isDealRoomOwner();
+
+      // Queries are owner-only; they must filter on ownedByUserId.
+      allow list: if isDealRoomOwner();
+
       allow create: if request.auth != null
-        && request.resource.data.ownedByUserId == request.auth.uid;
-      allow update, delete: if request.auth != null
-        && resource.data.ownedByUserId == request.auth.uid;
+        && request.resource.data.keys().hasOnly([
+          'productionId', 'ownedByUserId', 'production', 'dealInputs',
+          'config', 'isActive', 'createdAt', 'updatedAt', 'expiresAt'])
+        && request.resource.data.ownedByUserId == request.auth.uid
+        && request.resource.data.productionId is string
+        && ownsProduction(request.resource.data.productionId)
+        && validProductionSnapshot(request.resource.data.production)
+        && validDealInputs(request.resource.data.dealInputs)
+        && validConfig(request.resource.data.config)
+        && documentsMatchConfig(request.resource.data)
+        && request.resource.data.isActive is bool
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.updatedAt == request.time
+        && (!('expiresAt' in request.resource.data)
+          || request.resource.data.expiresAt is timestamp);
+
+      // Owner, productionId and createdAt are immutable; only the published
+      // snapshot, config, active flag and timestamps may change.
+      // Any change to config/production, and any (re)activation, must leave
+      // a publishable snapshot (documents opt-in honored, no individual
+      // investors); deactivating is always allowed.
+      allow update: if isDealRoomOwner()
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'production', 'dealInputs', 'config', 'isActive', 'updatedAt', 'expiresAt'])
+        && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['production'])
+          || validProductionSnapshot(request.resource.data.production))
+        && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['dealInputs'])
+          || validDealInputs(request.resource.data.dealInputs))
+        && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['config'])
+          || validConfig(request.resource.data.config))
+        && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['config', 'production', 'isActive'])
+          || (request.resource.data.isActive == false
+            && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['config', 'production']))
+          || publishable(request.resource.data))
+        && request.resource.data.isActive is bool
+        && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['updatedAt'])
+          || request.resource.data.updatedAt == request.time)
+        && (!('expiresAt' in request.resource.data)
+          || request.resource.data.expiresAt is timestamp);
+
+      allow delete: if isDealRoomOwner();
     }
   }
 }

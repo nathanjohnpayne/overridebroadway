@@ -2,7 +2,13 @@ import { initializeApp, getApps, getApp } from "firebase/app";
 import { getAuth, GoogleAuthProvider, browserLocalPersistence, setPersistence } from "firebase/auth";
 import { initializeFirestore, getFirestore } from "firebase/firestore";
 import { getStorage } from "firebase/storage";
-import { getAnalytics, isSupported } from "firebase/analytics";
+import {
+  getAnalytics,
+  initializeAnalytics,
+  isSupported,
+  type Analytics,
+} from "firebase/analytics";
+import { analyticsSettingsForLocation } from "./analyticsConfig";
 
 const firebaseConfig = {
   apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
@@ -49,13 +55,23 @@ if (typeof window !== "undefined") {
   setPersistence(auth, browserLocalPersistence).catch(() => {});
 }
 
-// Analytics is browser-only (not available in SSR/Node)
-export const getFirebaseAnalytics = async () => {
-  if (typeof window !== "undefined") {
-    const supported = await isSupported();
-    if (supported) {
-      return getAnalytics(app);
+// Analytics is browser-only (not available in SSR/Node).
+// The first call initializes Analytics with settings for the current route
+// (see analyticsConfig.ts — credential-bearing query strings are stripped);
+// later calls reuse that instance.
+let analyticsInstance: Analytics | null = null;
+export const getFirebaseAnalytics = async (): Promise<Analytics | null> => {
+  if (typeof window === "undefined") return null;
+  if (analyticsInstance) return analyticsInstance;
+  const supported = await isSupported();
+  if (!supported) return null;
+  if (!analyticsInstance) {
+    try {
+      analyticsInstance = initializeAnalytics(app, analyticsSettingsForLocation(window.location));
+    } catch {
+      // Already initialized (concurrent first calls or HMR) — reuse it.
+      analyticsInstance = getAnalytics(app);
     }
   }
-  return null;
+  return analyticsInstance;
 };

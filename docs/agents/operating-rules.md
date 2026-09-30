@@ -44,7 +44,7 @@ const liveDeal = { ...dealInputs, ...liveFormValues, investors: bridgedInvestors
 - **My Productions** (default): Grid of production cards the user owns
 - **My Investments** (`?view=investments`): Placeholder for investor view (feature stub)
 
-**Production CRUD:** Create dialog with name, status, optional subtitle/venue. Delete confirmation dialog — currently deletes only the root production document; subcollections and Storage files are **not cascade-deleted** (known gap).
+**Production CRUD:** Create dialog with name, status, optional subtitle/venue. Delete confirmation dialog — `deleteProduction` deletes the production's deal rooms, then its `dealInputs` / `scenarios` / `investors` / `producerPools` subcollections, then the root document (safe to re-run after a partial failure). The dashboard then removes uploaded Storage files under `productions/{uid}/{id}/` best effort and warns if any remain.
 
 ### Deal Builder Architecture
 
