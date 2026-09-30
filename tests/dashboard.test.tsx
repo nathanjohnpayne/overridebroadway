@@ -140,6 +140,20 @@ describe("DashboardPage", () => {
       expect(screen.getByRole("alert")).toHaveTextContent(/couldn.t load your productions/i);
       expect(screen.queryByText("No productions yet")).not.toBeInTheDocument();
     });
+
+    it("offers a Retry action that reloads the page", async () => {
+      mockError = new Error("unavailable");
+      const reload = vi.fn();
+      const original = window.location;
+      Object.defineProperty(window, "location", { configurable: true, value: { ...original, reload } });
+      try {
+        render(<DashboardPage />);
+        await userEvent.click(screen.getByRole("button", { name: "Retry" }));
+        expect(reload).toHaveBeenCalledOnce();
+      } finally {
+        Object.defineProperty(window, "location", { configurable: true, value: original });
+      }
+    });
   });
 
   describe("empty state", () => {

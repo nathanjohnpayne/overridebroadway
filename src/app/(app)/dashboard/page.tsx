@@ -212,7 +212,8 @@ export default function DashboardPage() {
       ) : productionsError ? (
         <div role="alert" className="text-center py-24 text-muted-foreground">
           <h2 className="text-xl font-semibold mb-2">Couldn&rsquo;t load your productions</h2>
-          <p className="text-sm">Check your connection and refresh the page.</p>
+          <p className="text-sm mb-6">Check your connection and try again.</p>
+          <Button variant="outline" onClick={() => window.location.reload()}>Retry</Button>
         </div>
       ) : displayedProductions.length === 0 ? (
         dashView === "productions" ? (
