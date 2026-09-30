@@ -87,6 +87,17 @@ service cloud.firestore {
           && p.name is string;
       }
 
+      // Document URLs/names may only be published when the room's config
+      // opts in (showDocuments == true).
+      function documentsMatchConfig(room) {
+        return room.config.get('showDocuments', false) == true
+          || !room.production.keys().hasAny([
+            'investorInstructionLetterUrl', 'investorInstructionLetterName',
+            'memberSignaturePageUrl', 'memberSignaturePageName',
+            'subscriptionAgreementUrl', 'subscriptionAgreementName',
+            'operatingAgreementUrl', 'operatingAgreementName']);
+      }
+
       // Individual investors are never published: the legacy investors
       // array must be absent or empty.
       function validDealInputs(d) {
@@ -114,6 +125,7 @@ service cloud.firestore {
         && validProductionSnapshot(request.resource.data.production)
         && validDealInputs(request.resource.data.dealInputs)
         && validConfig(request.resource.data.config)
+        && documentsMatchConfig(request.resource.data)
         && request.resource.data.isActive is bool
         && request.resource.data.createdAt == request.time
         && request.resource.data.updatedAt == request.time
@@ -131,6 +143,8 @@ service cloud.firestore {
           || validDealInputs(request.resource.data.dealInputs))
         && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['config'])
           || validConfig(request.resource.data.config))
+        && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['config', 'production'])
+          || documentsMatchConfig(request.resource.data))
         && request.resource.data.isActive is bool
         && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['updatedAt'])
           || request.resource.data.updatedAt == request.time)

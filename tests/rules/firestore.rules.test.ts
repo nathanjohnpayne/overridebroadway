@@ -198,6 +198,23 @@ describe("dealRooms create", () => {
     );
   });
 
+  it("denies document URLs when showDocuments is off", async () => {
+    const withDocs = {
+      name: "Alice Show",
+      status: "open",
+      operatingAgreementUrl: "https://example.test/oa.pdf",
+      operatingAgreementName: "oa.pdf",
+    };
+    await assertFails(
+      db("alice").collection("dealRooms").add(newRoomPayload({ production: withDocs }))
+    );
+    await assertSucceeds(
+      db("alice")
+        .collection("dealRooms")
+        .add(newRoomPayload({ production: withDocs, config: { ...baseConfig, showDocuments: true } }))
+    );
+  });
+
   it("denies unexpected production snapshot fields", async () => {
     await assertFails(
       db("alice")
@@ -233,6 +250,50 @@ describe("dealRooms update/delete", () => {
         dealInputs: { totalCapitalization: 2000000, investors: [] },
         updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
       })
+    );
+  });
+
+  it("denies turning showDocuments off while document URLs remain", async () => {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await ctx.firestore().doc("dealRooms/docs-room").set(
+        seededRoom({
+          config: { ...baseConfig, showDocuments: true },
+          production: {
+            name: "Alice Show",
+            status: "open",
+            operatingAgreementUrl: "https://example.test/oa.pdf",
+          },
+        })
+      );
+    });
+    const ref = db("alice").doc("dealRooms/docs-room");
+    await assertFails(
+      ref.update({
+        config: baseConfig,
+        updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+      })
+    );
+    await assertSucceeds(
+      ref.update({
+        config: baseConfig,
+        production: { name: "Alice Show", status: "open" },
+        updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+      })
+    );
+  });
+
+  it("still lets the owner deactivate a legacy room that carries document URLs", async () => {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await ctx.firestore().doc("dealRooms/legacy-room").set(
+        seededRoom({
+          production: { name: "Alice Show", status: "open", operatingAgreementUrl: "https://example.test/oa.pdf" },
+        })
+      );
+    });
+    await assertSucceeds(
+      db("alice")
+        .doc("dealRooms/legacy-room")
+        .update({ isActive: false, updatedAt: firebase.firestore.FieldValue.serverTimestamp() })
     );
   });
 
