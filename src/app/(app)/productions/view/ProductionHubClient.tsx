@@ -356,6 +356,10 @@ export default function ProductionHubClient() {
   // A failed investor/pool subscription must never render as valid zero or stale
   // capitalization data: every figure derived from them is withheld until they load.
   const capLoadError = investorsError ?? poolsError;
+  // Until both listeners have delivered, investor/pool-derived figures are
+  // unknown, not zero: withhold them exactly as on a load failure.
+  const capLoading = investorsLoading || poolsLoading;
+  const capUnavailable = capLoadError !== null || capLoading;
   const [production, setProduction] = useState<Production | null>(null);
   const [prodLoading, setProdLoading] = useState(true);
   const [investorSheetOpen, setInvestorSheetOpen] = useState(false);
@@ -511,9 +515,9 @@ export default function ProductionHubClient() {
 
   // Ownership rollup engine — single source of truth for all cap table math
   const ownershipRollup = useMemo(() => {
-    if (!dealInputs || capLoadError) return null;
+    if (!dealInputs || capUnavailable) return null;
     return computeOwnershipRollup(investors, pools, dealInputs.totalCapitalization);
-  }, [investors, pools, dealInputs, capLoadError]);
+  }, [investors, pools, dealInputs, capUnavailable]);
 
   // Capitalization summary (derived from rollup)
   const capitalizationSummary = useMemo(() => ({
@@ -812,7 +816,7 @@ export default function ProductionHubClient() {
                   </div>
                   <div className="text-sm">
                     <span className="text-muted-foreground">Investors: </span>
-                    <span className="font-medium">{capLoadError ? "—" : investors.length}</span>
+                    <span className="font-medium">{capUnavailable ? "—" : investors.length}</span>
                   </div>
                   <div className="text-sm">
                     <span className="text-muted-foreground">Waterfall: </span>
@@ -923,7 +927,12 @@ export default function ProductionHubClient() {
         {/* ════════════════════════════════ CAPITALIZATION ════════════════════════════════════════════════════ */}
         <TabsContent value="capitalization">
           {/* Summary stat cards — withheld on a load failure so they never read as zero */}
-          {!capLoadError && (
+          {capLoading && !capLoadError && (
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6" data-testid="cap-summary-loading">
+              {[1, 2, 3, 4].map((i) => <Skeleton key={i} className="h-24 rounded-xl" />)}
+            </div>
+          )}
+          {!capUnavailable && (
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
             <Card>
               <CardContent className="pt-4">
@@ -1471,6 +1480,11 @@ export default function ProductionHubClient() {
                           {capLoadError ? (
                             <div role="alert" className="p-6 text-sm text-destructive">
                               Investor returns are unavailable because investors couldn&rsquo;t be loaded &mdash; reload to try again.
+                            </div>
+                          ) : capLoading ? (
+                            <div className="p-6 space-y-2" data-testid="investor-returns-loading">
+                              <Skeleton className="h-8 w-full" />
+                              <Skeleton className="h-8 w-full" />
                             </div>
                           ) : modelOutput.investorReturns.length === 0 ? (
                             <div className="p-6 space-y-4">

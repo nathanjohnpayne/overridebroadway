@@ -114,6 +114,19 @@ describe("ProductionHubClient — investor/pool load failure", () => {
     ).toBe(true);
   });
 
+  it("withholds investor figures (no false zero) while a listener is still loading", async () => {
+    hooks.investors.loading = true;
+    try {
+      await renderHub();
+      expect(screen.queryByText("Investors:")?.parentElement?.textContent).toContain("—");
+      expect(
+        screen.queryAllByRole("alert").some((a) => /investors or producer pools/i.test(a.textContent ?? "")),
+      ).toBe(false);
+    } finally {
+      hooks.investors.loading = false;
+    }
+  });
+
   it("renders normally with no alert when both listeners succeed", async () => {
     await renderHub();
     expect(
