@@ -112,6 +112,10 @@ async function deleteRefsInBatches(refs: DocumentReference[]): Promise<void> {
  *     the parent production, so they must go before the parent document.
  *  3. The production document last.
  *
+ * There is no cross-document transaction, so a failure can leave a partially
+ * deleted production. Every step only deletes what still exists, so calling
+ * this again resumes the delete.
+ *
  * Uploaded files under productions/{ownerUserId}/{productionId}/ are removed
  * by the caller via `deleteProductionFiles` (storage.ts) — best effort, since
  * orphaned files are not reachable without their download URLs.

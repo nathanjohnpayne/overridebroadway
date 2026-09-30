@@ -236,6 +236,14 @@ describe("dealRooms update/delete", () => {
     );
   });
 
+  it("denies a client-chosen updatedAt", async () => {
+    await assertFails(
+      db("alice")
+        .doc("dealRooms/active-room")
+        .update({ isActive: false, updatedAt: firebase.firestore.Timestamp.fromMillis(0) })
+    );
+  });
+
   it("denies changing ownedByUserId", async () => {
     await assertFails(db("alice").doc("dealRooms/active-room").update({ ownedByUserId: "bob" }));
   });

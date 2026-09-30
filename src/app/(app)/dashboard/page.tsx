@@ -91,13 +91,21 @@ export default function DashboardPage() {
       // Uploaded files are cleaned up best-effort; a failure here must not
       // report the (already completed) production delete as failed.
       const failedFiles = await deleteProductionFiles(user.uid, deleteTarget.id);
-      if (failedFiles !== 0) {
-        console.warn(`Production ${deleteTarget.id} deleted; some uploaded files could not be removed.`);
+      if (failedFiles === 0) {
+        toast.success(`"${deleteTarget.name}" deleted.`);
+      } else {
+        console.warn(
+          failedFiles < 0
+            ? `Production ${deleteTarget.id} deleted; uploaded files could not be listed for cleanup.`
+            : `Production ${deleteTarget.id} deleted; ${failedFiles} uploaded file(s) could not be removed.`
+        );
+        toast.warning(`"${deleteTarget.name}" deleted, but some uploaded files could not be removed.`);
       }
-      toast.success(`"${deleteTarget.name}" deleted.`);
       setDeleteTarget(null);
     } catch {
-      toast.error("Failed to delete production.");
+      // deleteProduction is safe to re-run: each step only deletes what is
+      // still there, so a retry resumes an interrupted delete.
+      toast.error("Couldn't finish deleting this production. Please try again.");
     } finally {
       setDeleting(false);
     }

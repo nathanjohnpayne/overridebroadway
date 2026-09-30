@@ -132,6 +132,8 @@ service cloud.firestore {
         && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['config'])
           || validConfig(request.resource.data.config))
         && request.resource.data.isActive is bool
+        && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['updatedAt'])
+          || request.resource.data.updatedAt == request.time)
         && (!('expiresAt' in request.resource.data)
           || request.resource.data.expiresAt is timestamp);
 
