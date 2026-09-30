@@ -125,6 +125,22 @@ describe("dealRooms read access", () => {
     await assertSucceeds(db().doc("dealRooms/docs-active").get());
   });
 
+  it("fails closed for non-owners on an active legacy room that still lists investors", async () => {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await ctx.firestore().doc("dealRooms/legacy-investors").set(
+        seededRoom({
+          dealInputs: {
+            totalCapitalization: 1000000,
+            investors: [{ id: "i1", name: "Jane", amount: 50000, units: 2 }],
+          },
+        })
+      );
+    });
+    await assertFails(db().doc("dealRooms/legacy-investors").get());
+    await assertFails(db("bob").doc("dealRooms/legacy-investors").get());
+    await assertSucceeds(db("alice").doc("dealRooms/legacy-investors").get());
+  });
+
   it("allows the owner to get their own inactive room", async () => {
     await assertSucceeds(db("alice").doc("dealRooms/inactive-room").get());
   });
@@ -334,6 +350,35 @@ describe("dealRooms update/delete", () => {
       ref.update({
         isActive: true,
         production: { name: "Alice Show", status: "open" },
+        updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+      })
+    );
+  });
+
+  it("requires a sanitized deal-input snapshot to reactivate a legacy room with investors", async () => {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await ctx.firestore().doc("dealRooms/legacy-inv-inactive").set(
+        seededRoom({
+          isActive: false,
+          dealInputs: {
+            totalCapitalization: 1000000,
+            investors: [{ id: "i1", name: "Jane", amount: 50000, units: 2 }],
+          },
+        })
+      );
+    });
+    const ref = db("alice").doc("dealRooms/legacy-inv-inactive");
+    await assertFails(
+      ref.update({ isActive: true, updatedAt: firebase.firestore.FieldValue.serverTimestamp() })
+    );
+    // The shape DealRoomSetup's Reactivate writes: config + sanitized
+    // production + sanitized deal inputs.
+    await assertSucceeds(
+      ref.update({
+        isActive: true,
+        config: baseConfig,
+        production: { name: "Alice Show", status: "development" },
+        dealInputs: { totalCapitalization: 1000000, investors: [] },
         updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
       })
     );
