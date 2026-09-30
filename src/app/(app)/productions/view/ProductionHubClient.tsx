@@ -351,8 +351,15 @@ export default function ProductionHubClient() {
   const { user } = useAuth();
   const router = useRouter();
   const { dealInputs, loading: dealLoading, saving, save } = useDealInputs(id);
-  const { investors, loading: investorsLoading, add: addInvestor, update: updateInvestorData, remove: removeInvestorFn } = useInvestors(id || null);
-  const { pools, loading: poolsLoading, defaultPoolId, add: addPool, update: updatePool, remove: removePool } = useProducerPools(id || null, user?.uid ?? null);
+  const { investors, loading: investorsLoading, error: investorsError, add: addInvestor, update: updateInvestorData, remove: removeInvestorFn } = useInvestors(id || null);
+  const { pools, loading: poolsLoading, error: poolsError, defaultPoolId, add: addPool, update: updatePool, remove: removePool } = useProducerPools(id || null, user?.uid ?? null);
+  // A failed investor/pool subscription must never render as valid zero or stale
+  // capitalization data: every figure derived from them is withheld until they load.
+  const capLoadError = investorsError ?? poolsError;
+  // Until both listeners have delivered, investor/pool-derived figures are
+  // unknown, not zero: withhold them exactly as on a load failure.
+  const capLoading = investorsLoading || poolsLoading;
+  const capUnavailable = capLoadError !== null || capLoading;
   const [production, setProduction] = useState<Production | null>(null);
   const [prodLoading, setProdLoading] = useState(true);
   const [investorSheetOpen, setInvestorSheetOpen] = useState(false);
@@ -508,9 +515,9 @@ export default function ProductionHubClient() {
 
   // Ownership rollup engine — single source of truth for all cap table math
   const ownershipRollup = useMemo(() => {
-    if (!dealInputs) return null;
+    if (!dealInputs || capUnavailable) return null;
     return computeOwnershipRollup(investors, pools, dealInputs.totalCapitalization);
-  }, [investors, pools, dealInputs]);
+  }, [investors, pools, dealInputs, capUnavailable]);
 
   // Capitalization summary (derived from rollup)
   const capitalizationSummary = useMemo(() => ({
@@ -622,6 +629,11 @@ export default function ProductionHubClient() {
 
   return (
     <div className="max-w-5xl mx-auto px-6 py-8">
+      {capLoadError && (
+        <div role="alert" className="mb-6 rounded-md border border-destructive/50 bg-destructive/10 p-4 text-sm text-destructive">
+          Couldn&rsquo;t load this production&rsquo;s investors or producer pools. Capitalization and investor-return figures are hidden rather than shown as zero. Reload the page to try again.
+        </div>
+      )}
       {/* Back + Header */}
       <div className="flex items-center gap-4 mb-6">
         <Button variant="ghost" size="sm" asChild>
@@ -804,7 +816,7 @@ export default function ProductionHubClient() {
                   </div>
                   <div className="text-sm">
                     <span className="text-muted-foreground">Investors: </span>
-                    <span className="font-medium">{investors.length}</span>
+                    <span className="font-medium">{capUnavailable ? "—" : investors.length}</span>
                   </div>
                   <div className="text-sm">
                     <span className="text-muted-foreground">Waterfall: </span>
@@ -914,7 +926,13 @@ export default function ProductionHubClient() {
 
         {/* ════════════════════════════════ CAPITALIZATION ════════════════════════════════════════════════════ */}
         <TabsContent value="capitalization">
-          {/* Summary stat cards */}
+          {/* Summary stat cards — withheld on a load failure so they never read as zero */}
+          {capLoading && !capLoadError && (
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6" data-testid="cap-summary-loading">
+              {[1, 2, 3, 4].map((i) => <Skeleton key={i} className="h-24 rounded-xl" />)}
+            </div>
+          )}
+          {!capUnavailable && (
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
             <Card>
               <CardContent className="pt-4">
@@ -967,6 +985,7 @@ export default function ProductionHubClient() {
               </CardContent>
             </Card>
           </div>
+          )}
 
           {/* View selector + actions */}
           <div className="flex items-center justify-between mb-4 flex-wrap gap-3">
@@ -1013,7 +1032,11 @@ export default function ProductionHubClient() {
           {/* Ledger card */}
           <Card>
             <CardContent className="p-0">
-              {investorsLoading || poolsLoading ? (
+              {capLoadError ? (
+                <div role="alert" className="p-6 text-sm text-destructive">
+                  Couldn&rsquo;t load investors or producer pools &mdash; reload to try again.
+                </div>
+              ) : investorsLoading || poolsLoading ? (
                 <div className="p-6 space-y-2">
                   <Skeleton className="h-8 w-full" />
                   <Skeleton className="h-8 w-full" />
@@ -1454,7 +1477,16 @@ export default function ProductionHubClient() {
                       <Card>
                         <CardHeader><CardTitle className="text-base">Per-Investor Return Profile</CardTitle></CardHeader>
                         <CardContent className="p-0">
-                          {modelOutput.investorReturns.length === 0 ? (
+                          {capLoadError ? (
+                            <div role="alert" className="p-6 text-sm text-destructive">
+                              Investor returns are unavailable because investors couldn&rsquo;t be loaded &mdash; reload to try again.
+                            </div>
+                          ) : capLoading ? (
+                            <div className="p-6 space-y-2" data-testid="investor-returns-loading">
+                              <Skeleton className="h-8 w-full" />
+                              <Skeleton className="h-8 w-full" />
+                            </div>
+                          ) : modelOutput.investorReturns.length === 0 ? (
                             <div className="p-6 space-y-4">
                               <p className="text-sm text-muted-foreground text-center">
                                 No individual investors entered. Showing full investor pool returns against total capitalization.{" "}

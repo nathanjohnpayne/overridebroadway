@@ -61,7 +61,7 @@ function ArtworkBanner({ url, alt }: { url: string; alt: string }) {
 }
 
 export default function DashboardPage() {
-  const { productions, loading } = useProductions();
+  const { productions, loading, error: productionsError } = useProductions();
   const { user } = useAuth();
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -208,6 +208,12 @@ export default function DashboardPage() {
       {loading ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
           {[1,2,3].map(i => <Skeleton key={i} className="h-48 rounded-xl" />)}
+        </div>
+      ) : productionsError ? (
+        <div role="alert" className="text-center py-24 text-muted-foreground">
+          <h2 className="text-xl font-semibold mb-2">Couldn&rsquo;t load your productions</h2>
+          <p className="text-sm mb-6">Check your connection and try again.</p>
+          <Button variant="outline" onClick={() => window.location.reload()}>Retry</Button>
         </div>
       ) : displayedProductions.length === 0 ? (
         dashView === "productions" ? (
