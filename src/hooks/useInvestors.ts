@@ -20,6 +20,8 @@ export function useInvestors(productionId: string | null) {
       setLoading(false);
       return;
     }
+    // Drop the previous production's data so it can never render under this id.
+    setInvestors([]);
     setLoading(true);
     setError(null);
     const unsubscribe = subscribeToInvestors(

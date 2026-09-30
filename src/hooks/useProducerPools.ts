@@ -44,6 +44,8 @@ export function useProducerPools(
       setLoading(false);
       return;
     }
+    // Drop the previous production's data so it can never render under this id.
+    setPools([]);
     setLoading(true);
     setError(null);
     const unsubscribe = subscribeToProducerPools(
