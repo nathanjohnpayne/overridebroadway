@@ -66,7 +66,7 @@ A "Direct Investors" default pool is lazily created by `ensureDefaultPool()` in 
 
 | Hook | Returns | Purpose |
 |------|---------|---------|
-| `useDealInputs(productionId)` | `{ dealInputs, loading, saving, save }` | Loads deal from Firestore; `save()` calls `stripUndefined` before `setDoc` |
+| `useDealInputs(productionId)` | `{ dealInputs, loading, saving, save }` | Loads deal from Firestore; `save()` uses the authenticated quota backend |
 | `useDebounce<T>(value, delay)` | `T` (debounced) | Generic debounce — 1.5s autosave in DealBuilder |
 | `useInvestors(productionId)` | `{ investors, loading, add, update, remove }` | Real-time onSnapshot for `investors` subcollection |
 | `useProducerPools(productionId, ownerUserId)` | `{ pools, loading, defaultPoolId, add, update, remove }` | Real-time listener for producer pools; lazy-migrates legacy investors to default pool |
@@ -150,10 +150,10 @@ productions/{userId}/{productionId}/
 
 **Firestore:**
 - Deal inputs saved under fixed document ID `"primary"` within `dealInputs` subcollection
-- Always call `stripUndefined()` before `setDoc`
+- Client mutation payloads remove undefined fields before the callable request; backend writes add trusted timestamps
 - Zustand persist key changed from `"broadway-deal-draft"` to `"deal-builder-ui"` — old key is defunct
 - Deal room documents are in the **top-level** `dealRooms` collection, not a subcollection of productions
-- `deleteProduction(productionId, ownerUserId)` deletes the production's deal rooms, then its `dealInputs` / `scenarios` / `investors` / `producerPools` subcollections, then the root document; it is safe to re-run after a partial failure. The dashboard then removes Storage files under `productions/{uid}/{id}/` best effort. **Known gap:** the production stays writable until its root document is deleted, so a write from another open tab after a subcollection was enumerated can leave an orphaned child document once the root is gone; re-running cannot remove it, because subcollection rules require the parent. Closing this needs a `deleting` marker enforced in rules or a server-side recursive delete
+- `deleteProduction(productionId, ownerUserId)` uses the authenticated callable backend. It fences writes before cleanup, scrubs and permanently retires room tokens, deletes child records, and retains a minimal production reservation. Storage cleanup is best effort. Identifier reservations cannot be reassigned.
 
 **UI:**
 - Recharts Tooltip `formatter` props use `unknown` types — cast with `Number(v)` and `String(name)`

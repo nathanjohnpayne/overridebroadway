@@ -1,3 +1,6 @@
 extra_top_level_dirs: [public]
 test_globs: ["tests/**/*.test.*"]
 generated_dirs: [out]
+
+spec_test_map:
+  resource-quotas: tests/rules/backend.rules.test.ts

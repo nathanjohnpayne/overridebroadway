@@ -2,7 +2,7 @@
 
 Override is the financial operating platform for Broadway producers — from modeling capitalization to managing investors, tracking recoupment, and distributing returns.
 
-**Project type:** Next.js 16 App Router, `output: 'export'` (static export) + Firebase Hosting/Auth/Firestore/Storage. No backend server, no Cloud Functions.
+**Project type:** Next.js 16 App Router, `output: 'export'` (static export) + Firebase Hosting/Auth/Firestore/Storage. A Firebase callable Cloud Function enforces authenticated mutation and upload quotas; reads remain client-side.
 
 **Stack:**
 - Next.js 16.1.6 (App Router, static export)
@@ -112,9 +112,9 @@ dealRooms/{token}                 # top-level collection; token = document ID = 
 ```
 
 **Security rules:**
-- Productions and subcollections: `request.auth.uid == resource.data.userId`; `userId` is immutable on update
+- Productions and subcollections: `request.auth.uid == resource.data.userId`; client writes are denied and backend ownership is immutable
 - Deal rooms: public `get` by token when `isActive == true`; the owner can always `get`; `list`/queries are owner-only. Create requires owning the referenced production and a validated shape (key allowlist, `producerNote` ≤ 500, no individual investors); `ownedByUserId`, `productionId` and `createdAt` are immutable
-- Storage: owner-only under `productions/{uid}/…`; writes limited to PDF or PNG/JPEG/WebP/GIF, ≤ 20MB
+- Storage: owner-only under `productions/{uid}/…`; uploads require a backend reservation, use immutable object paths, and remain limited to PDF or PNG/JPEG/WebP/GIF, ≤ 20MB
 - Rules tests: `npm run test:rules` (Firestore + Storage emulators via `firebase emulators:exec`; needs Java). CI runs them in `.github/workflows/repo_lint_local.yml`
 
 **Composite indexes** (`firestore.indexes.json`):
