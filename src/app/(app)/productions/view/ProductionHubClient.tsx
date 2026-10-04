@@ -1097,8 +1097,7 @@ export default function ProductionHubClient() {
                                     const remaining = investors.filter(i => i.id !== inv.id);
                                     const anyPersonal = remaining.some(i => i.isPersonalInvestment);
                                     if (inv.isPersonalInvestment) {
-                                      await updateProduction(id, { hasPersonalInvestment: anyPersonal });
-                                      setProduction(prev => prev ? { ...prev, hasPersonalInvestment: anyPersonal } : prev);
+                                                          setProduction(prev => prev ? { ...prev, hasPersonalInvestment: anyPersonal } : prev);
                                     }
                                     toast.success("Investor removed.");
                                   }}>
@@ -1123,8 +1122,7 @@ export default function ProductionHubClient() {
                       const remaining = investors.filter(i => i.id !== inv.id);
                       const anyPersonal = remaining.some(i => i.isPersonalInvestment);
                       if (inv.isPersonalInvestment) {
-                        await updateProduction(id, { hasPersonalInvestment: anyPersonal });
-                        setProduction(prev => prev ? { ...prev, hasPersonalInvestment: anyPersonal } : prev);
+                              setProduction(prev => prev ? { ...prev, hasPersonalInvestment: anyPersonal } : prev);
                       }
                       toast.success("Investor removed.");
                     }}
@@ -1218,7 +1216,6 @@ export default function ProductionHubClient() {
                   const anyPersonal = investors.some(inv =>
                     inv.id === editingInvestor.id ? data.isPersonalInvestment : inv.isPersonalInvestment
                   );
-                  await updateProduction(id, { hasPersonalInvestment: anyPersonal });
                   setProduction(prev => prev ? { ...prev, hasPersonalInvestment: anyPersonal } : prev);
                 }
                 toast.success("Investor updated.");
@@ -1227,7 +1224,6 @@ export default function ProductionHubClient() {
                 Analytics.investorAdded();
                 toast.success("Investor added.");
                 if (data.isPersonalInvestment) {
-                  await updateProduction(id, { hasPersonalInvestment: true });
                   setProduction(prev => prev ? { ...prev, hasPersonalInvestment: true } : prev);
                 }
                 setEditingInvestor({

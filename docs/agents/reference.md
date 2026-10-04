@@ -92,21 +92,16 @@ A "Direct Investors" default pool is lazily created by `ensureDefaultPool()` in 
 ### Storage Layout
 
 ```
-productions/{userId}/{productionId}/
-  artwork
-  operating-agreement.pdf
-  instruction-letter.pdf
-  member-signature-page.pdf
-  subscription-agreement.pdf
-  investors/{investorId}/
-    distributed/instruction-letter.pdf
-    distributed/signature-page.pdf
-    distributed/subscription-agreement.pdf
-    signed/signature-page.pdf
-    signed/subscription-agreement.pdf
-    executed/signature-page.pdf
-    executed/subscription-agreement.pdf
+productions/{userId}/{productionId}/uploads/{serverGeneratedUuid}
 ```
+
+Every new upload uses an immutable UUID object path authorized by a private,
+15-minute `uploadReservations/{uuid}` document binding its owner, production,
+exact size and MIME type. Production/investor URL fields associate these objects
+with logical artwork and document slots. Older objects may still use semantic
+paths such as `artwork` and `investors/{investorId}/signed/signature-page.pdf`;
+include both layouts when reconciling existing Storage usage.
+
 
 ### Industry Benchmarks
 

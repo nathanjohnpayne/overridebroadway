@@ -1,4 +1,5 @@
 /** @spec resource-quotas */
+import { createHash } from "node:crypto";
 import { createRequire } from "node:module";
 import { beforeAll, beforeEach, afterAll, describe, it, expect } from "vitest";
 import { initializeTestEnvironment, type RulesTestEnvironment } from "@firebase/rules-unit-testing";
@@ -55,6 +56,8 @@ describe("trusted quota mutations", () => {
     await expect(service("alice", { action: "set", collection: "mutationQuotas", id: "alice", data: { files: 0 } })).rejects.toMatchObject({ code: "invalid-argument" });
     await expect(service("alice", { action: "update", collection: "productions", id: "alice-prod", data: { userId: "bob" } })).rejects.toMatchObject({ code: "permission-denied" });
     await expect(service("alice", { action: "update", collection: "productions", id: "alice-prod", data: { deleting: false } })).rejects.toMatchObject({ code: "invalid-argument" });
+    await expect(service("alice", { action: "update", collection: "productions", id: "alice-prod", data: { artworkUrl: "https://firebasestorage.googleapis.com/v0/b/demo-bucket/o/productions%2Falice%2Falice-prod%2Fuploads%2Ffake" } })).rejects.toMatchObject({ code: "failed-precondition" });
+    expect((await db.collection("uploadObjects").get()).size).toBe(0);
   });
   it("creates the fixed default pool idempotently without overwriting a concurrent record", async () => {
     const input = { action: "ensure", collection: "producerPools", productionId: "alice-prod", id: "direct", data: { name: "Direct Investors" } };
@@ -113,6 +116,7 @@ describe("trusted quota mutations", () => {
   it("retires replaced objects and retries cleanup after a failed Storage deletion", async () => {
     const oldPath = "productions/alice/alice-prod/uploads/old-file";
     const oldUrl = `https://firebasestorage.googleapis.com/v0/b/demo-bucket/o/${encodeURIComponent(oldPath)}?token=old`;
+    await db.doc(`uploadObjects/${createHash("sha256").update(oldPath).digest("hex")}`).set({ uid: "alice", path: oldPath, retired: false });
     await db.doc("productions/alice-prod").update({ artworkUrl: oldUrl });
     await db.doc("uploadReservations/old-file").set({ uid: "alice", path: oldPath });
     let failDelete = true;
@@ -122,10 +126,55 @@ describe("trusted quota mutations", () => {
     await expect(replace("alice", input)).rejects.toThrow("Storage unavailable");
     expect((await db.doc("uploadReservations/old-file").get()).exists).toBe(false);
     expect((await db.doc("productions/alice-prod").get()).data().cleanupPaths).toEqual([oldPath]);
+    await expect(replace("alice", { ...input, data: { artworkUrl: oldUrl } })).rejects.toMatchObject({ code: "failed-precondition" });
+    expect((await db.doc("productions/alice-prod").get()).data().artworkUrl).toBe("https://example.test/new");
     failDelete = false;
     await replace("alice", input);
     expect(deleted).toEqual([oldPath]);
     expect((await db.doc("productions/alice-prod").get()).data().cleanupPaths).toEqual([]);
+  });
+  it("preserves snapshotted files until a room refresh releases them", async () => {
+    const path = "productions/alice/alice-prod/uploads/snapshot-file";
+    const url = `https://firebasestorage.googleapis.com/v0/b/demo-bucket/o/${encodeURIComponent(path)}?token=old`;
+    const deleted: string[] = [];
+    const mutate = createService({ db, Timestamp, FieldValue, HttpsError, now: () => time, bucket: { name: "demo-bucket", file: (p: string) => ({ delete: async () => { deleted.push(p); } }) } });
+    await db.doc(`uploadObjects/${createHash("sha256").update(path).digest("hex")}`).set({ uid: "alice", path, retired: false });
+    await db.doc("productions/alice-prod").update({ artworkUrl: url });
+    const { id } = await mutate("alice", { action: "create", collection: "dealRooms", data: { ...room, production: { name: "Alice", artworkUrl: url } } });
+    await mutate("alice", { action: "update", collection: "productions", id: "alice-prod", data: { artworkUrl: "https://example.test/new" } });
+    expect(deleted).toEqual([]);
+    await mutate("alice", { action: "update", collection: "productions", id: "alice-prod", data: { artworkUrl: url } });
+    expect((await db.doc("productions/alice-prod").get()).data().cleanupPaths).toEqual([]);
+    expect(deleted).toEqual([]);
+    await mutate("alice", { action: "update", collection: "productions", id: "alice-prod", data: { artworkUrl: "https://example.test/new" } });
+    await mutate("alice", { action: "update", collection: "dealRooms", id, data: { production: { name: "Alice", artworkUrl: "https://example.test/new" } } });
+    expect(deleted).toEqual([path]);
+  });
+  it("retains a failed investor deletion for retry and removes its documents", async () => {
+    const path = "productions/alice/alice-prod/uploads/investor-file";
+    const url = `https://firebasestorage.googleapis.com/v0/b/demo-bucket/o/${encodeURIComponent(path)}?token=old`;
+    await db.doc(`uploadObjects/${createHash("sha256").update(path).digest("hex")}`).set({ uid: "alice", path, retired: false });
+    await db.doc("productions/alice-prod/investors/legacy").set({ name: "Legacy", signedSignaturePageUrl: url, isPersonalInvestment: true });
+    let failDelete = true;
+    const deleted: string[] = [];
+    const mutate = createService({ db, Timestamp, FieldValue, HttpsError, now: () => time, bucket: { name: "demo-bucket", file: (p: string) => ({ delete: async () => { if (failDelete) throw new Error("Storage unavailable"); deleted.push(p); } }) } });
+    const input = { action: "delete", collection: "investors", productionId: "alice-prod", id: "legacy" };
+    await expect(mutate("alice", input)).rejects.toThrow("Storage unavailable");
+    expect((await db.doc("productions/alice-prod/investors/legacy").get()).data()).toMatchObject({ deleting: true, cleanupPaths: [path] });
+    failDelete = false;
+    await mutate("alice", input);
+    expect(deleted).toEqual([path]);
+    expect((await db.doc("productions/alice-prod/investors/legacy").get()).exists).toBe(false);
+    expect((await db.doc("productions/alice-prod").get()).data().hasPersonalInvestment).toBe(false);
+  });
+  it("commits investor and room metadata even at the last mutation slot", async () => {
+    await db.doc("mutationQuotas/alice").set({ recent: Array(59).fill(time) });
+    await service("alice", { action: "create", collection: "investors", productionId: "alice-prod", data: { isPersonalInvestment: true } });
+    expect((await db.doc("productions/alice-prod").get()).data().hasPersonalInvestment).toBe(true);
+    time += 60000;
+    await db.doc("mutationQuotas/alice").set({ recent: Array(59).fill(time) });
+    const { id } = await service("alice", { action: "create", collection: "dealRooms", data: room });
+    expect((await db.doc("productions/alice-prod").get()).data()).toMatchObject({ dealRoomToken: id, dealRoomEnabled: true });
   });
   it("keeps a failed production deletion fenced for retry and cleans 100 files in one operation", async () => {
     await db.doc("dealRooms/legacy-no-timestamp").set({ productionId: "alice-prod", ownedByUserId: "alice", isActive: true });

@@ -1,4 +1,4 @@
-const { randomUUID } = require('node:crypto');
+const { randomUUID, createHash } = require('node:crypto');
 const LIMITS = Object.freeze({ productions: 20, investors: 200, scenarios: 20, producerPools: 20, dealRooms: 20, files: 100, bytes: 500 * 1024 * 1024, mutations: 60 });
 const DOCUMENT_FIELDS = ['investorInstructionLetterUrl', 'investorInstructionLetterName', 'memberSignaturePageUrl', 'memberSignaturePageName', 'subscriptionAgreementUrl', 'subscriptionAgreementName', 'operatingAgreementUrl', 'operatingAgreementName'];
 const PRODUCTION_FIELDS = ['name', 'subtitle', 'venue', 'status', 'showUrl', 'artworkUrl', ...DOCUMENT_FIELDS, 'hasPersonalInvestment', 'dealRoomEnabled', 'dealRoomToken'];
@@ -41,13 +41,13 @@ function createService({ db, bucket, Timestamp, FieldValue, HttpsError, now = Da
   }
   async function retireFile(uid, path) {
     const match = path.match(/^productions\/[^/]+\/[^/]+\/uploads\/([A-Za-z0-9_-]+)$/);
-    if (match) {
-      const ref = db.doc(`uploadReservations/${match[1]}`);
-      await db.runTransaction(async tx => {
-        const reservation = (await tx.get(ref)).data();
-        if (reservation?.uid === uid && reservation.path === path) tx.delete(ref);
-      });
-    }
+    await db.runTransaction(async tx => {
+      const objectRef = retirementRef(path), object = await tx.get(objectRef);
+      const ref = match ? db.doc(`uploadReservations/${match[1]}`) : null;
+      const reservation = ref ? (await tx.get(ref)).data() : null;
+      if (object.exists && object.data().uid === uid && object.data().path === path) tx.update(objectRef, { retired: true });
+      if (reservation?.uid === uid && reservation.path === path) tx.delete(ref);
+    });
     await bucket.file(path).delete({ ignoreNotFound: true });
   }
   function ownedObjectPath(uid, productionId, url) {
@@ -59,6 +59,44 @@ function createService({ db, bucket, Timestamp, FieldValue, HttpsError, now = Da
       const path = decodeURIComponent(parsed.pathname.slice(prefix.length));
       return path.startsWith(`productions/${uid}/${productionId}/`) && !path.includes('..') ? path : null;
     } catch { return null; }
+  }
+  function retirementRef(path) { return db.doc(`uploadObjects/${createHash('sha256').update(path).digest('hex')}`); }
+  function pathsIn(uid, productionId, data) {
+    return Object.entries(data || {}).filter(([key]) => key.endsWith('Url')).map(([, value]) => ownedObjectPath(uid, productionId, value)).filter(Boolean);
+  }
+  async function checkURLs(tx, uid, productionId, data) {
+    for (const path of pathsIn(uid, productionId, data)) {
+      const object = await tx.get(retirementRef(path));
+      if (!object.exists || object.data().uid !== uid || object.data().path !== path || object.data().retired) fail('failed-precondition', 'This file is unavailable. Upload a new copy.');
+    }
+  }
+  async function cleanupQueued(ref, uid, productionId) {
+    const paths = (await ref.get()).data()?.cleanupPaths || [];
+    for (const path of paths) {
+      const claimed = await db.runTransaction(async tx => {
+        const current = await tx.get(ref);
+        const rooms = await tx.get(db.collection('dealRooms').where('productionId', '==', productionId).where('ownedByUserId', '==', uid).limit(LIMITS.dealRooms + 1));
+        if (rooms.size > LIMITS.dealRooms) fail('resource-exhausted', 'Legacy rooms require reconciliation before file retirement.');
+        // Preserve reversible room snapshots, including inactive rooms.
+        if ((!current.data()?.deleting && pathsIn(uid, productionId, current.data()).includes(path)) || rooms.docs.some(r => pathsIn(uid, productionId, r.data().production).includes(path))) return false;
+        const match = path.match(/\/uploads\/([A-Za-z0-9_-]+)$/);
+        const reservationRef = match ? db.doc(`uploadReservations/${match[1]}`) : null;
+        const reservation = reservationRef ? (await tx.get(reservationRef)).data() : null;
+        const objectRef = retirementRef(path), object = await tx.get(objectRef);
+        if (!object.exists || object.data().uid !== uid || object.data().path !== path) fail('failed-precondition', 'Existing files require reconciliation before retirement.');
+        // URL writers read this marker in their transaction; claiming retirement
+        // serializes with restoration and new snapshots before deleting bytes.
+        tx.update(objectRef, { retired: true });
+        if (reservation?.uid === uid && reservation.path === path) tx.delete(reservationRef);
+        return true;
+      });
+      if (!claimed) continue;
+      await bucket.file(path).delete({ ignoreNotFound: true });
+      await db.runTransaction(async tx => {
+        const current = await tx.get(ref);
+        if (current.exists) tx.update(ref, { cleanupPaths: (current.data().cleanupPaths || []).filter(p => p !== path) });
+      });
+    }
   }
   return async (uid, input) => {
     object(input); identifier(uid);
@@ -75,13 +113,14 @@ function createService({ db, bucket, Timestamp, FieldValue, HttpsError, now = Da
         await own(tx, uid, input.productionId);
         if (input.logicalPath.startsWith('investors/')) {
           const investor = await tx.get(db.doc(`productions/${input.productionId}/investors/${input.logicalPath.split('/')[1]}`));
-          if (!investor.exists) fail('not-found', 'Investor is unavailable.');
+          if (!investor.exists || investor.data().deleting) fail('not-found', 'Investor is unavailable.');
         }
         const quotaRef = db.doc(`mutationQuotas/${uid}`), quota = (await tx.get(quotaRef)).data();
         // Existing storage must be reconciled before enabling this backend.
         if ((quota.files || 0) >= LIMITS.files || (quota.bytes || 0) + input.size > LIMITS.bytes) fail('resource-exhausted', 'Upload quota reached.');
         tx.set(quotaRef, { files: (quota.files || 0) + 1, bytes: (quota.bytes || 0) + input.size }, { merge: true });
         tx.create(db.doc(`uploadReservations/${uploadId}`), { uid, productionId: input.productionId, path, size: input.size, contentType: input.contentType, expiresAt: Timestamp.fromMillis(now() + 15 * 60000) });
+        tx.create(retirementRef(path), { uid, productionId: input.productionId, path, retired: false });
       });
       return { path };
     }
@@ -150,22 +189,34 @@ function createService({ db, bucket, Timestamp, FieldValue, HttpsError, now = Da
     const child = ['dealInputs', 'scenarios', 'investors', 'producerPools'].includes(collection);
     const parent = child ? `productions/${identifier(input.productionId)}/` : '';
     const ref = db.doc(`${parent}${collection}/${id}`);
+    const deletingInvestor = collection === 'investors' && input.action === 'delete';
     let cleanupPaths = [];
     await db.runTransaction(async tx => {
       // Serialize all allocations for one user, including first legacy allocations.
       const quotaRef = db.doc(`mutationQuotas/${uid}`), quotaSnap = await tx.get(quotaRef);
       const existing = await tx.get(ref), old = existing.data();
+      let roomParent;
       cleanupPaths = [...(old?.cleanupPaths || [])];
       if (collection === 'productions' || collection === 'investors') {
         const productionId = collection === 'productions' ? id : input.productionId;
-        for (const key of Object.keys(data).filter(k => k.endsWith('Url'))) {
-          if (old?.[key] !== data[key]) {
+        await checkURLs(tx, uid, productionId, data);
+        for (const key of Object.keys(deletingInvestor ? old || {} : data).filter(k => k.endsWith('Url'))) {
+          if (deletingInvestor || old?.[key] !== data[key]) {
             const path = ownedObjectPath(uid, productionId, old?.[key]);
             if (path && !cleanupPaths.includes(path)) cleanupPaths.push(path);
           }
         }
+        const nextPaths = deletingInvestor ? [] : pathsIn(uid, productionId, { ...old, ...data });
+        cleanupPaths = cleanupPaths.filter(path => !nextPaths.includes(path));
       }
       if (child) await own(tx, uid, input.productionId);
+      if (child && old?.deleting && !deletingInvestor) fail('permission-denied', 'Record deletion is pending.');
+      let personalInvestment;
+      if (collection === 'investors') {
+        const investors = await tx.get(db.collection(`productions/${input.productionId}/investors`).limit(LIMITS.investors + 1));
+        personalInvestment = investors.docs.some(d => d.id !== id && !d.data().deleting && d.data().isPersonalInvestment)
+          || (!deletingInvestor && !!({ ...old, ...data }).isPersonalInvestment);
+      }
       if (collection === 'productions') {
         if (existing.exists && (old.userId !== uid || old.deleted || old.deleting)) fail('permission-denied', 'Production is unavailable.');
         if (input.action !== 'create' && !existing.exists) fail('not-found', 'Production is unavailable.');
@@ -181,9 +232,10 @@ function createService({ db, bucket, Timestamp, FieldValue, HttpsError, now = Da
         if (input.action === 'delete') fail('invalid-argument', 'Deactivate the room instead.');
         const next = { ...old, ...data };
         if (next.ownedByUserId !== uid || (old && next.productionId !== old.productionId)) fail('permission-denied', 'Room owner and production cannot change.');
-        await own(tx, uid, next.productionId);
+        roomParent = await own(tx, uid, next.productionId);
         // Deactivation must remain possible for legacy snapshots that no longer validate.
         if (!(Object.keys(data).length === 1 && data.isActive === false)) room(next);
+        await checkURLs(tx, uid, next.productionId, next.production);
 
       }
       if (input.action === 'update' && !existing.exists) fail('not-found', 'Record is unavailable.');
@@ -197,21 +249,31 @@ function createService({ db, bucket, Timestamp, FieldValue, HttpsError, now = Da
       }
       if (input.action === 'ensure' && existing.exists) return;
       tx.set(quotaRef, { allocations: (quotaSnap.data()?.allocations || 0) + 1 }, { merge: true });
-      if (input.action === 'delete') tx.delete(ref);
+      // Keep investor URLs and their pending work durable until file cleanup succeeds.
+      if (deletingInvestor && existing.exists) tx.set(ref, { deleting: true, cleanupPaths }, { merge: true });
+      else if (input.action === 'delete') tx.delete(ref);
       else {
         const payload = { ...data, updatedAt: FieldValue.serverTimestamp() };
-        if (cleanupPaths.length) payload.cleanupPaths = cleanupPaths;
+        if (collection === 'productions' || collection === 'investors') payload.cleanupPaths = cleanupPaths;
         if (!existing.exists) payload.createdAt = FieldValue.serverTimestamp();
         if (collection === 'productions') payload.userId = uid;
         tx.set(ref, payload, { merge: true });
       }
+      if (collection === 'investors') tx.update(db.doc(`productions/${input.productionId}`), { hasPersonalInvestment: personalInvestment, updatedAt: FieldValue.serverTimestamp() });
+      if (collection === 'dealRooms' && (input.action === 'create' || (data.isActive !== undefined && roomParent.data.dealRoomToken === id))) tx.update(roomParent.ref, { dealRoomToken: id, dealRoomEnabled: data.isActive ?? old.isActive, updatedAt: FieldValue.serverTimestamp() });
     });
-    for (const path of cleanupPaths) await retireFile(uid, path);
-    if (cleanupPaths.length && input.action !== 'delete') {
+    if (deletingInvestor) {
+      // Fenced records no longer actively reference their URLs.
+      await cleanupQueued(ref, uid, input.productionId);
       await db.runTransaction(async tx => {
         const current = await tx.get(ref);
-        if (current.exists) tx.update(ref, { cleanupPaths: (current.data().cleanupPaths || []).filter(p => !cleanupPaths.includes(p)) });
+        if (current.exists && current.data().deleting && !(current.data().cleanupPaths || []).length) tx.delete(ref);
       });
+    } else if (cleanupPaths.length && (collection === 'productions' || collection === 'investors')) {
+      await cleanupQueued(ref, uid, collection === 'productions' ? id : input.productionId);
+    } else if (collection === 'dealRooms' && input.action !== 'create') {
+      const productionId = (await ref.get()).data()?.productionId;
+      if (productionId) await cleanupQueued(db.doc(`productions/${productionId}`), uid, productionId);
     }
     return { id };
   };
