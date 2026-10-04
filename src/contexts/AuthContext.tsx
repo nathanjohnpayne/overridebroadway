@@ -16,8 +16,8 @@ import {
   signOut as firebaseSignOut,
   updateProfile,
 } from "firebase/auth";
-import { doc, setDoc, serverTimestamp } from "firebase/firestore";
-import { auth, googleProvider, db } from "@/lib/firebase";
+import { mutate } from "@/lib/mutations";
+import { auth, googleProvider } from "@/lib/firebase";
 
 interface AuthContextValue {
   user: User | null;
@@ -31,17 +31,9 @@ interface AuthContextValue {
 const AuthContext = createContext<AuthContextValue | null>(null);
 
 async function ensureUserDoc(user: User) {
-  const ref = doc(db, "users", user.uid);
-  await setDoc(
-    ref,
-    {
-      email: user.email,
-      displayName: user.displayName,
-      photoURL: user.photoURL,
-      updatedAt: serverTimestamp(),
-    },
-    { merge: true }
-  );
+  await mutate({ action: "set", collection: "users", data: {
+    email: user.email, displayName: user.displayName, photoURL: user.photoURL,
+  } });
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {

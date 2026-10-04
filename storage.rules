@@ -1,10 +1,29 @@
 rules_version = '2';
 service firebase.storage {
   match /b/{bucket}/o {
-    // Production files: artwork and operating agreements
-    // Path: productions/{userId}/{productionId}/{filename}
     match /productions/{userId}/{productionId}/{allPaths=**} {
-      allow read, write: if request.auth != null && request.auth.uid == userId;
+      allow read: if request.auth != null && request.auth.uid == userId;
+      allow delete, update: if false;
+    }
+    match /productions/{userId}/{productionId}/uploads/{uploadId} {
+      function validReservation() {
+        let reservation = firestore.get(/databases/(default)/documents/uploadReservations/$(uploadId)).data;
+        let production = firestore.get(/databases/(default)/documents/productions/$(productionId)).data;
+        return reservation.uid == userId
+          && reservation.productionId == productionId
+          && reservation.path == 'productions/' + userId + '/' + productionId + '/uploads/' + uploadId
+          && request.time < reservation.expiresAt
+          && request.resource.size == reservation.size
+          && request.resource.contentType == reservation.contentType
+          && production.userId == userId
+          && production.get('deleting', false) == false
+          && production.get('deleted', false) == false;
+      }
+      // Each backend allocation authorizes one immutable object creation.
+      allow create: if resource == null && request.auth != null && request.auth.uid == userId
+        && request.resource.size <= 20 * 1024 * 1024
+        && request.resource.contentType.matches('application/pdf|image/(png|jpeg|webp|gif)')
+        && validReservation();
     }
   }
 }

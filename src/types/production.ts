@@ -2,6 +2,7 @@ export type ProductionStatus = "development" | "preview" | "open" | "closed";
 
 export interface Production {
   id: string;
+  deleting?: boolean;
   userId: string;
   name: string;
   subtitle?: string;

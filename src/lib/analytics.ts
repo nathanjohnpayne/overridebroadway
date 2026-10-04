@@ -67,8 +67,10 @@ export const Analytics = {
   dealRoomCreated: (productionId: string) =>
     trackEvent("deal_room_created", { production_id: productionId }),
 
-  dealRoomViewed: (token: string) =>
-    trackEvent("deal_room_viewed", { token }),
+  // Takes the production id, never the share token (the token is the
+  // room's access credential and must not reach analytics).
+  dealRoomViewed: (productionId: string) =>
+    trackEvent("deal_room_viewed", { production_id: productionId }),
 
   dealRoomLinkCopied: (productionId: string) =>
     trackEvent("deal_room_link_copied", { production_id: productionId }),

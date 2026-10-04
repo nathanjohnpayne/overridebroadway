@@ -9,6 +9,7 @@ export function useProductions() {
   const { user } = useAuth();
   const [productions, setProductions] = useState<Production[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<Error | null>(null);
 
   useEffect(() => {
     if (!user) {
@@ -17,12 +18,22 @@ export function useProductions() {
       return;
     }
     setLoading(true);
-    const unsubscribe = subscribeToProductions(user.uid, (prods) => {
-      setProductions(prods);
-      setLoading(false);
-    });
+    setError(null);
+    const unsubscribe = subscribeToProductions(
+      user.uid,
+      (prods) => {
+        setProductions(prods);
+        setError(null);
+        setLoading(false);
+      },
+      (err) => {
+        console.error("Failed to load productions:", err);
+        setError(err);
+        setLoading(false);
+      }
+    );
     return unsubscribe;
   }, [user]);
 
-  return { productions, loading };
+  return { productions, loading, error };
 }

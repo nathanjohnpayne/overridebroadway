@@ -26,6 +26,15 @@
       ]
     },
     {
+      "collectionGroup": "dealRooms",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "productionId", "order": "ASCENDING" },
+        { "fieldPath": "ownedByUserId", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
+    },
+    {
       "collectionGroup": "scenarios",
       "queryScope": "COLLECTION",
       "fields": [

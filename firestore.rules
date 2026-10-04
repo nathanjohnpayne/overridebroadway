@@ -2,56 +2,103 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // User profiles — each user can only read/write their own
+    // User profiles — each user can only read their own; backend controls writes
     match /users/{userId} {
-      allow read, write: if request.auth != null && request.auth.uid == userId;
+      allow read: if request.auth != null && request.auth.uid == userId;
+      allow write: if false;
     }
 
-    // Productions — users can only access their own productions
+    // Productions — users can only access their own productions.
+    // Ownership (userId) is immutable after create.
     match /productions/{productionId} {
-      allow read, update, delete: if request.auth != null
-        && resource.data.userId == request.auth.uid;
-      allow create: if request.auth != null
-        && request.resource.data.userId == request.auth.uid;
+      allow read: if request.auth != null && resource.data.userId == request.auth.uid;
+      allow write: if false; // All mutations use the quota-enforcing callable backend.
 
       // Deal inputs subcollection
       match /dealInputs/{dealInputId} {
-        allow read, write: if request.auth != null
+        allow read: if request.auth != null
           && get(/databases/$(database)/documents/productions/$(productionId)).data.userId
-          == request.auth.uid;
+          == request.auth.uid
+          && get(/databases/$(database)/documents/productions/$(productionId)).data.get('deleting', false) == false;
+        allow write: if false;
       }
 
       // Scenarios subcollection
       match /scenarios/{scenarioId} {
-        allow read, write: if request.auth != null
+        allow read: if request.auth != null
           && get(/databases/$(database)/documents/productions/$(productionId)).data.userId
-          == request.auth.uid;
+          == request.auth.uid
+          && get(/databases/$(database)/documents/productions/$(productionId)).data.get('deleting', false) == false;
+        allow write: if false;
       }
 
       // Capitalization investors subcollection
       match /investors/{investorId} {
-        allow read, write: if request.auth != null
+        allow read: if request.auth != null
           && get(/databases/$(database)/documents/productions/$(productionId)).data.userId
-          == request.auth.uid;
+          == request.auth.uid
+          && get(/databases/$(database)/documents/productions/$(productionId)).data.get('deleting', false) == false;
+        allow write: if false;
       }
 
       // Producer pools subcollection
       match /producerPools/{poolId} {
-        allow read, write: if request.auth != null
+        allow read: if request.auth != null
           && get(/databases/$(database)/documents/productions/$(productionId)).data.userId
-          == request.auth.uid;
+          == request.auth.uid
+          && get(/databases/$(database)/documents/productions/$(productionId)).data.get('deleting', false) == false;
+        allow write: if false;
       }
     }
 
-    // Deal Rooms — publicly readable when active; only the owner can write
-    // The share token IS the document ID. Knowing the token grants read access.
-    // No individual investor data is stored here — only deal economics snapshots.
+    // Deal Rooms — the share token IS the document ID; knowing the token
+    // grants read access to an ACTIVE room. Only aggregate deal economics are
+    // stored here (see src/lib/dealRoomSnapshot.ts) — never investor data.
     match /dealRooms/{token} {
-      allow read: if resource.data.isActive == true;
-      allow create: if request.auth != null
-        && request.resource.data.ownedByUserId == request.auth.uid;
-      allow update, delete: if request.auth != null
-        && resource.data.ownedByUserId == request.auth.uid;
+      function isDealRoomOwner() {
+        return request.auth != null
+          && resource.data.ownedByUserId == request.auth.uid;
+      }
+
+      // Document URLs/names may only be published when the room's config
+      // opts in (showDocuments == true).
+      function documentsMatchConfig(room) {
+        return room.config.get('showDocuments', false) == true
+          || !room.production.keys().hasAny([
+            'investorInstructionLetterUrl', 'investorInstructionLetterName',
+            'memberSignaturePageUrl', 'memberSignaturePageName',
+            'subscriptionAgreementUrl', 'subscriptionAgreementName',
+            'operatingAgreementUrl', 'operatingAgreementName']);
+      }
+
+      // Individual investors are never published: the legacy investors
+      // array must be absent or empty.
+      function validDealInputs(d) {
+        return d is map
+          && (!('investors' in d) || (d.investors is list && d.investors.size() == 0));
+      }
+
+      // What a room must satisfy to be served to non-owners.
+      function publishable(room) {
+        return documentsMatchConfig(room) && validDealInputs(room.dealInputs);
+      }
+
+      // A direct get by token: allowed for active rooms whose snapshot honors
+      // the documents opt-in and carries no individual investors, and always
+      // for the owner. Rooms written before
+      // that was enforced fail closed for non-owners until re-saved.
+      // A get of a token that does not exist is allowed (returns "not found")
+      // so the investor view can tell a bad link from a deactivated one.
+      allow get: if resource == null
+        || (resource.data.isActive == true && publishable(resource.data)
+          && get(/databases/$(database)/documents/productions/$(resource.data.productionId)).data.get('deleting', false) == false)
+        || isDealRoomOwner();
+
+      // Queries are owner-only; they must filter on ownedByUserId.
+      allow list: if isDealRoomOwner();
+
+      // Only the backend allocates tokens; retired documents remain permanent reservations.
+      allow write: if false;
     }
   }
 }

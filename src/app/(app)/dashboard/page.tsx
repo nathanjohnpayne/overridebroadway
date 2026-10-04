@@ -60,7 +60,7 @@ function ArtworkBanner({ url, alt }: { url: string; alt: string }) {
 }
 
 export default function DashboardPage() {
-  const { productions, loading } = useProductions();
+  const { productions, loading, error: productionsError } = useProductions();
   const { user } = useAuth();
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -83,14 +83,16 @@ export default function DashboardPage() {
   const displayedProductions = dashView === "productions" ? productions : investmentProductions;
 
   async function handleDelete() {
-    if (!deleteTarget) return;
+    if (!deleteTarget || !user) return;
     setDeleting(true);
     try {
-      await deleteProduction(deleteTarget.id);
+      await deleteProduction(deleteTarget.id, user.uid);
       toast.success(`"${deleteTarget.name}" deleted.`);
       setDeleteTarget(null);
     } catch {
-      toast.error("Failed to delete production.");
+      // deleteProduction is safe to re-run: each step only deletes what is
+      // still there, so a retry resumes an interrupted delete.
+      toast.error("Couldn't finish deleting this production. Please try again.");
     } finally {
       setDeleting(false);
     }
@@ -194,6 +196,12 @@ export default function DashboardPage() {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
           {[1,2,3].map(i => <Skeleton key={i} className="h-48 rounded-xl" />)}
         </div>
+      ) : productionsError ? (
+        <div role="alert" className="text-center py-24 text-muted-foreground">
+          <h2 className="text-xl font-semibold mb-2">Couldn&rsquo;t load your productions</h2>
+          <p className="text-sm mb-6">Check your connection and try again.</p>
+          <Button variant="outline" onClick={() => window.location.reload()}>Retry</Button>
+        </div>
       ) : displayedProductions.length === 0 ? (
         dashView === "productions" ? (
           <div className="text-center py-24 text-muted-foreground">
@@ -215,7 +223,7 @@ export default function DashboardPage() {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
           {displayedProductions.map(prod => (
             <div key={prod.id} className="relative group rounded-xl border ring-0 shadow-sm hover:shadow-md transition-shadow">
-              <Link href={`/productions/view?id=${prod.id}`}>
+              <Link href={prod.deleting ? "#" : `/productions/view?id=${prod.id}`} onClick={e => { if (prod.deleting) { e.preventDefault(); setDeleteTarget(prod); } }}>
                 <Card className="cursor-pointer h-full pt-0 overflow-hidden border-0 shadow-none">
                   {prod.artworkUrl ? (
                     <ArtworkBanner url={prod.artworkUrl} alt={prod.name} />
@@ -232,13 +240,13 @@ export default function DashboardPage() {
                         {prod.venue && <p className="text-xs text-muted-foreground">{prod.venue}</p>}
                       </div>
                       <Badge className={STATUS_COLORS[prod.status] + " text-xs capitalize shrink-0"} variant="outline">
-                        {prod.status}
+                        {prod.deleting ? "Deletion pending" : prod.status}
                       </Badge>
                     </div>
                   </CardHeader>
                   <CardContent className="flex items-center justify-between text-xs text-muted-foreground">
                     <span>Updated {prod.updatedAt.toLocaleDateString()}</span>
-                    <ChevronRight className="h-4 w-4" />
+                    {prod.deleting ? <span className="font-medium text-destructive">Retry deletion</span> : <ChevronRight className="h-4 w-4" />}
                   </CardContent>
                 </Card>
               </Link>

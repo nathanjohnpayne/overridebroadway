@@ -28,6 +28,7 @@ vi.mock("sonner", () => ({
   toast: Object.assign(vi.fn(), {
     error: vi.fn(),
     success: vi.fn(),
+    warning: vi.fn(),
   }),
 }));
 
@@ -49,8 +50,9 @@ vi.mock("@/lib/firestore", () => ({
 // Mock useProductions hook
 const mockProductions: Production[] = [];
 let mockLoading = false;
+let mockError: Error | null = null;
 vi.mock("@/hooks/useProductions", () => ({
-  useProductions: () => ({ productions: mockProductions, loading: mockLoading }),
+  useProductions: () => ({ productions: mockProductions, loading: mockLoading, error: mockError }),
 }));
 
 // Mock useAuth
@@ -104,6 +106,7 @@ beforeEach(() => {
   // Reset module-level state by reassigning mockProductions contents
   mockProductions.length = 0;
   mockLoading = false;
+  mockError = null;
   mockUseSearchParams.mockReturnValue(new URLSearchParams());
 });
 
@@ -120,6 +123,31 @@ describe("DashboardPage", () => {
       expect(skeletons.length).toBeGreaterThan(0);
       // We should see placeholder content (no production cards)
       expect(screen.queryByText("Hamilton")).not.toBeInTheDocument();
+    });
+  });
+
+  describe("load error", () => {
+    it("shows an error instead of the empty state when the listener fails", () => {
+      mockError = new Error("permission-denied");
+
+      render(<DashboardPage />);
+
+      expect(screen.getByRole("alert")).toHaveTextContent(/couldn.t load your productions/i);
+      expect(screen.queryByText("No productions yet")).not.toBeInTheDocument();
+    });
+
+    it("offers a Retry action that reloads the page", async () => {
+      mockError = new Error("unavailable");
+      const reload = vi.fn();
+      const original = window.location;
+      Object.defineProperty(window, "location", { configurable: true, value: { ...original, reload } });
+      try {
+        render(<DashboardPage />);
+        await userEvent.click(screen.getByRole("button", { name: "Retry" }));
+        expect(reload).toHaveBeenCalledOnce();
+      } finally {
+        Object.defineProperty(window, "location", { configurable: true, value: original });
+      }
     });
   });
 
@@ -298,6 +326,15 @@ describe("DashboardPage", () => {
   });
 
   describe("delete production", () => {
+    it("offers a deletion retry after reloading a fenced production", async () => {
+      const user = userEvent.setup();
+      mockProductions.push(makeProduction({ id: "pending", name: "Pending Show", deleting: true }));
+      render(<DashboardPage />);
+      await user.click(screen.getByText("Retry deletion"));
+      expect(screen.getByRole("dialog")).toBeInTheDocument();
+      await user.click(screen.getByRole("button", { name: /^delete$/i }));
+      await waitFor(() => expect(mockDeleteProduction).toHaveBeenCalledWith("pending", "user-1"));
+    });
     it("calls deleteProduction when confirmed", async () => {
       const user = userEvent.setup();
       mockDeleteProduction.mockResolvedValue(undefined);
@@ -332,7 +369,7 @@ describe("DashboardPage", () => {
       await user.click(screen.getByRole("button", { name: /^delete$/i }));
 
       await waitFor(() => {
-        expect(mockDeleteProduction).toHaveBeenCalledWith("del-1");
+        expect(mockDeleteProduction).toHaveBeenCalledWith("del-1", "user-1");
       });
     });
   });

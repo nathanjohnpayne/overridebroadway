@@ -3,30 +3,37 @@ import {
   doc,
   getDocs,
   getDoc,
-  setDoc,
-  addDoc,
-  updateDoc,
-  deleteDoc,
   query,
   where,
   orderBy,
-  serverTimestamp,
   onSnapshot,
   Unsubscribe,
   Timestamp,
+  type FirestoreError,
 } from "firebase/firestore";
 import { db } from "./firebase";
+import { createRecord, mutate } from "./mutations";
 import type { Production } from "@/types/production";
 import type { DealInputs } from "@/types/deal";
 import type { Scenario } from "@/types/model";
 import type { CapitalizationInvestor, ProducerPool } from "@/types/capitalization";
 import type { DealRoom, CreateDealRoomPayload, UpdateDealRoomPayload } from "@/types/dealRoom";
 
+// ─── Listeners ──────────────────────────────────────────────────────────────
+
+// Fallback error handler so a failed listener is never silent.
+function logSnapshotError(label: string) {
+  return (error: FirestoreError) => {
+    console.error(`Firestore listener for ${label} failed:`, error);
+  };
+}
+
 // ─── Productions ────────────────────────────────────────────────────────────
 
 export function subscribeToProductions(
   userId: string,
-  callback: (productions: Production[]) => void
+  callback: (productions: Production[]) => void,
+  onError?: (error: FirestoreError) => void
 ): Unsubscribe {
   const q = query(
     collection(db, "productions"),
@@ -34,7 +41,7 @@ export function subscribeToProductions(
     orderBy("updatedAt", "desc")
   );
   return onSnapshot(q, (snap) => {
-    const productions = snap.docs.map((d) => {
+    const productions = snap.docs.filter((d) => !d.data().deleted).map((d) => {
       const data = d.data();
       return {
         id: d.id,
@@ -44,13 +51,13 @@ export function subscribeToProductions(
       } as Production;
     });
     callback(productions);
-  });
+  }, onError ?? logSnapshotError("productions"));
 }
 
 export async function getProduction(productionId: string): Promise<Production | null> {
   const ref = doc(db, "productions", productionId);
   const snap = await getDoc(ref);
-  if (!snap.exists()) return null;
+  if (!snap.exists() || snap.data().deleted || snap.data().deleting) return null;
   const data = snap.data();
   return {
     id: snap.id,
@@ -64,25 +71,20 @@ export async function createProduction(
   userId: string,
   data: Omit<Production, "id" | "createdAt" | "updatedAt">
 ): Promise<string> {
-  const ref = await addDoc(collection(db, "productions"), {
-    ...data,
-    userId,
-    createdAt: serverTimestamp(),
-    updatedAt: serverTimestamp(),
-  });
-  return ref.id;
+  return createRecord("productions", { ...data, userId });
 }
 
 export async function updateProduction(
   productionId: string,
   data: Partial<Omit<Production, "id" | "userId" | "createdAt">>
 ): Promise<void> {
-  const ref = doc(db, "productions", productionId);
-  await updateDoc(ref, { ...data, updatedAt: serverTimestamp() });
+  await mutate({ action: "update", collection: "productions", id: productionId, data });
 }
 
-export async function deleteProduction(productionId: string): Promise<void> {
-  await deleteDoc(doc(db, "productions", productionId));
+/** Fence writes, retire share tokens, and clean up through the trusted backend. */
+export async function deleteProduction(productionId: string, ownerUserId: string): Promise<void> {
+  void ownerUserId; // The backend derives ownership from the authenticated caller.
+  await mutate({ action: "deleteProduction", productionId });
 }
 
 // ─── Deal Inputs ─────────────────────────────────────────────────────────────
@@ -94,26 +96,11 @@ export async function getDealInputs(productionId: string): Promise<DealInputs | 
   return snap.data() as DealInputs;
 }
 
-// Firestore rejects documents containing `undefined` values.
-// This strips them recursively while preserving Firestore sentinels (serverTimestamp, etc.)
-function stripUndefined<T>(obj: T): T {
-  if (obj === null || typeof obj !== "object" || Array.isArray(obj)) return obj;
-  // Firestore sentinel objects have a special toJSON / type shape — don't recurse into them
-  if ("_methodName" in (obj as object)) return obj;
-  return Object.fromEntries(
-    Object.entries(obj as Record<string, unknown>)
-      .filter(([, v]) => v !== undefined)
-      .map(([k, v]) => [k, stripUndefined(v)])
-  ) as T;
-}
-
 export async function saveDealInputs(
   productionId: string,
   inputs: DealInputs
 ): Promise<void> {
-  const ref = doc(db, "productions", productionId, "dealInputs", "primary");
-  const payload = stripUndefined({ ...inputs, updatedAt: serverTimestamp() });
-  await setDoc(ref, payload, { merge: true });
+  await mutate({ action: "set", collection: "dealInputs", productionId, id: "primary", data: inputs });
 }
 
 // ─── Scenarios ───────────────────────────────────────────────────────────────
@@ -130,32 +117,25 @@ export async function saveScenario(
   scenario: Scenario
 ): Promise<string> {
   if (scenario.id) {
-    const ref = doc(db, "productions", productionId, "scenarios", scenario.id);
-    await setDoc(ref, scenario, { merge: true });
+    await mutate({ action: "set", collection: "scenarios", productionId, id: scenario.id, data: scenario });
     return scenario.id;
-  } else {
-    const ref = await addDoc(
-      collection(db, "productions", productionId, "scenarios"),
-      scenario
-    );
-    return ref.id;
   }
+  return createRecord("scenarios", scenario, productionId);
 }
 
 export async function deleteScenario(
   productionId: string,
   scenarioId: string
 ): Promise<void> {
-  await deleteDoc(
-    doc(db, "productions", productionId, "scenarios", scenarioId)
-  );
+  await mutate({ action: "delete", collection: "scenarios", productionId, id: scenarioId });
 }
 
 // ─── Capitalization Investors ──────────────────────────────────────────────────
 
 export function subscribeToInvestors(
   productionId: string,
-  callback: (investors: CapitalizationInvestor[]) => void
+  callback: (investors: CapitalizationInvestor[]) => void,
+  onError?: (error: FirestoreError) => void
 ): Unsubscribe {
   const q = query(
     collection(db, "productions", productionId, "investors"),
@@ -172,23 +152,14 @@ export function subscribeToInvestors(
       } as CapitalizationInvestor;
     });
     callback(investors);
-  });
+  }, onError ?? logSnapshotError("investors"));
 }
 
 export async function createInvestor(
   productionId: string,
   data: Omit<CapitalizationInvestor, "id" | "createdAt" | "updatedAt">
 ): Promise<string> {
-  const payload = stripUndefined({
-    ...data,
-    createdAt: serverTimestamp(),
-    updatedAt: serverTimestamp(),
-  });
-  const ref = await addDoc(
-    collection(db, "productions", productionId, "investors"),
-    payload
-  );
-  return ref.id;
+  return createRecord("investors", data, productionId);
 }
 
 export async function updateInvestor(
@@ -196,23 +167,22 @@ export async function updateInvestor(
   investorId: string,
   data: Partial<Omit<CapitalizationInvestor, "id" | "productionId" | "createdAt">>
 ): Promise<void> {
-  const ref = doc(db, "productions", productionId, "investors", investorId);
-  const payload = stripUndefined({ ...data, updatedAt: serverTimestamp() });
-  await updateDoc(ref, payload);
+  await mutate({ action: "update", collection: "investors", productionId, id: investorId, data });
 }
 
 export async function deleteInvestor(
   productionId: string,
   investorId: string
 ): Promise<void> {
-  await deleteDoc(doc(db, "productions", productionId, "investors", investorId));
+  await mutate({ action: "delete", collection: "investors", productionId, id: investorId });
 }
 
 // ─── Producer Pools ──────────────────────────────────────────────────────────
 
 export function subscribeToProducerPools(
   productionId: string,
-  callback: (pools: ProducerPool[]) => void
+  callback: (pools: ProducerPool[]) => void,
+  onError?: (error: FirestoreError) => void
 ): Unsubscribe {
   const q = query(
     collection(db, "productions", productionId, "producerPools"),
@@ -229,23 +199,14 @@ export function subscribeToProducerPools(
       } as ProducerPool;
     });
     callback(pools);
-  });
+  }, onError ?? logSnapshotError("producerPools"));
 }
 
 export async function createProducerPool(
   productionId: string,
   data: Omit<ProducerPool, "id" | "createdAt" | "updatedAt">
 ): Promise<string> {
-  const payload = stripUndefined({
-    ...data,
-    createdAt: serverTimestamp(),
-    updatedAt: serverTimestamp(),
-  });
-  const ref = await addDoc(
-    collection(db, "productions", productionId, "producerPools"),
-    payload
-  );
-  return ref.id;
+  return createRecord("producerPools", data, productionId);
 }
 
 export async function updateProducerPool(
@@ -253,17 +214,24 @@ export async function updateProducerPool(
   poolId: string,
   data: Partial<Omit<ProducerPool, "id" | "productionId" | "createdAt">>
 ): Promise<void> {
-  const ref = doc(db, "productions", productionId, "producerPools", poolId);
-  const payload = stripUndefined({ ...data, updatedAt: serverTimestamp() });
-  await updateDoc(ref, payload);
+  await mutate({ action: "update", collection: "producerPools", productionId, id: poolId, data });
 }
 
 export async function deleteProducerPool(
   productionId: string,
   poolId: string
 ): Promise<void> {
-  await deleteDoc(doc(db, "productions", productionId, "producerPools", poolId));
+  await mutate({ action: "delete", collection: "producerPools", productionId, id: poolId });
 }
+
+/**
+ * Fixed document id for the "Direct Investors" default pool. A deterministic
+ * id makes creation idempotent: concurrent bootstraps (two tabs, React
+ * StrictMode double effects) converge on one document instead of racing to
+ * create duplicates.
+ */
+export const DEFAULT_POOL_ID = "direct";
+export const DEFAULT_POOL_NAME = "Direct Investors";
 
 // Lazy migration: ensure a "Direct Investors" default pool exists and
 // assign any legacy investors (no producerPoolId) to it.
@@ -275,30 +243,25 @@ export async function ensureDefaultPool(
     collection(db, "productions", productionId, "producerPools")
   );
   if (!snap.empty) {
-    const defaultPool = snap.docs.find((d) => d.data().name === "Direct Investors");
+    // Legacy productions created their default pool with an auto-generated
+    // id; keep using it so existing investor assignments stay valid.
+    const defaultPool =
+      snap.docs.find((d) => d.id === DEFAULT_POOL_ID) ??
+      snap.docs.find((d) => d.data().name === DEFAULT_POOL_NAME);
     return defaultPool?.id ?? snap.docs[0].id;
   }
-  return createProducerPool(productionId, {
-    productionId,
-    ownerUserId,
-    name: "Direct Investors",
+  await mutate({
+    action: "ensure", collection: "producerPools", productionId, id: DEFAULT_POOL_ID,
+    data: { productionId, ownerUserId, name: DEFAULT_POOL_NAME },
   });
+  return DEFAULT_POOL_ID;
 }
 
 export async function assignInvestorsToDefaultPool(
   productionId: string,
   poolId: string
 ): Promise<void> {
-  const snap = await getDocs(
-    collection(db, "productions", productionId, "investors")
-  );
-  const updates: Promise<void>[] = [];
-  for (const d of snap.docs) {
-    if (!d.data().producerPoolId) {
-      updates.push(updateDoc(d.ref, { producerPoolId: poolId }));
-    }
-  }
-  await Promise.all(updates);
+  await mutate({ action: "assignDefaultPool", productionId, id: poolId });
 }
 
 // ─── Deal Rooms ───────────────────────────────────────────────────────────────
@@ -329,20 +292,16 @@ function hydrateDealRoom(id: string, data: Record<string, unknown>): DealRoom {
 export async function createDealRoom(
   payload: CreateDealRoomPayload
 ): Promise<string> {
-  const ref = await addDoc(
-    collection(db, "dealRooms"),
-    stripUndefined({
-      ...payload,
-      createdAt: serverTimestamp(),
-      updatedAt: serverTimestamp(),
-    })
-  );
-  return ref.id;
+  return createRecord("dealRooms", payload);
 }
 
 /**
  * Fetches a deal room by token (document ID).
- * Returns null if the document doesn't exist or is inactive.
+ * Returns null if the document doesn't exist.
+ *
+ * Security rules allow the read when the room is active or the caller owns
+ * it; otherwise the read rejects with `permission-denied` (for investors,
+ * that means the producer deactivated the link).
  * NOTE: This function can be called without auth — used by the investor-facing route.
  */
 export async function getDealRoom(token: string): Promise<DealRoom | null> {
@@ -360,13 +319,13 @@ export async function updateDealRoom(
   token: string,
   data: UpdateDealRoomPayload
 ): Promise<void> {
-  const ref = doc(db, "dealRooms", token);
-  await updateDoc(ref, stripUndefined({ ...data, updatedAt: serverTimestamp() }));
+  await mutate({ action: "update", collection: "dealRooms", id: token, data });
 }
 
 /**
  * Deactivates a deal room — sets isActive = false.
- * The URL will stop working immediately (Firestore rule blocks read when isActive = false).
+ * The URL stops working immediately for everyone except the owner
+ * (Firestore rules only allow non-owners to read active rooms).
  */
 export async function deactivateDealRoom(token: string): Promise<void> {
   await updateDealRoom(token, { isActive: false });
@@ -387,7 +346,7 @@ export async function getProductionDealRooms(
     orderBy("createdAt", "desc")
   );
   const snap = await getDocs(q);
-  return snap.docs.map((d) =>
+  return snap.docs.filter((d) => !d.data().retired).map((d) =>
     hydrateDealRoom(d.id, d.data() as Record<string, unknown>)
   );
 }

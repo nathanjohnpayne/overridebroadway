@@ -1,0 +1,82 @@
+# repo_lint_local.yml — consumer-local CI annex (never propagated by the hub).
+#
+# The hub-owned repo_lint.yml covers fleet policy checks only. App-specific
+# checks for this repository live here; agent-review.yml and
+# codex-review-check.sh observe this annex's check runs (#655).
+name: repo-lint-local
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: repo-lint-local-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  app-checks:
+    name: lint, typecheck, unit tests, build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '24'
+          cache: npm
+
+      - name: Install dependencies
+        run: |
+          npm ci
+          npm ci --prefix functions
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Typecheck
+        run: npx tsc --noEmit
+
+      - name: Unit tests
+        run: npm test
+
+      # Static export; NEXT_PUBLIC_FIREBASE_* are not needed to compile.
+      - name: Build
+        run: npm run build
+
+  rules-tests:
+    name: firestore/storage rules tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '24'
+          cache: npm
+
+      # The Firestore and Storage emulators run on the JVM.
+      - name: Set up Java
+        uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Install dependencies
+        run: |
+          npm ci
+          npm ci --prefix functions
+
+      - name: Run security rules tests against the emulators
+        run: npm run test:rules

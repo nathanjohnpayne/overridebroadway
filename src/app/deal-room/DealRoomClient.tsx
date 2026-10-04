@@ -4,8 +4,9 @@
  * DealRoomClient — the investor-facing entry point for a shared deal room.
  *
  * Reads the ?token= query param, fetches the DealRoom document from Firestore
- * (no auth required — security rules allow read when isActive = true), and
- * renders DealRoomView with the fetched data.
+ * (no auth required — security rules allow a direct get when isActive = true;
+ * listing/querying deal rooms is owner-only), and renders DealRoomView with
+ * the fetched data.
  *
  * No authentication is required or checked here. This route is intentionally
  * public — the token IS the access credential.
@@ -19,6 +20,15 @@ import type { DealRoom } from "@/types/dealRoom";
 import DealRoomView from "./DealRoomView";
 
 type LoadState = "loading" | "not_found" | "inactive" | "error" | "ready";
+
+function isPermissionDenied(err: unknown): boolean {
+  return (
+    typeof err === "object" &&
+    err !== null &&
+    "code" in err &&
+    (err as { code?: unknown }).code === "permission-denied"
+  );
+}
 
 export default function DealRoomClient() {
   const searchParams = useSearchParams();
@@ -46,9 +56,17 @@ export default function DealRoomClient() {
         }
         setDealRoom(room);
         setLoadState("ready");
-        // Track investor view — fire and forget
-        Analytics.dealRoomViewed(token!);
+        // Track investor view — fire and forget. Never log the token: it is
+        // the access credential for this room.
+        Analytics.dealRoomViewed(room.productionId);
       } catch (err) {
+        // Rules allow reading a missing token (→ null above) and active rooms;
+        // an existing room the viewer does not own is denied once the
+        // producer deactivates it.
+        if (isPermissionDenied(err)) {
+          setLoadState("inactive");
+          return;
+        }
         console.error("Failed to load deal room:", err);
         setLoadState("error");
       }

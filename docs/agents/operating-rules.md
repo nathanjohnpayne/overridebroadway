@@ -4,7 +4,7 @@
 2. **Static export rules.** Never add `"use client"` to `app/(app)/productions/view/page.tsx` — it will break `generateStaticParams`. Use the `*DynamicLoader` client pattern.
 3. **One form instance.** There is exactly one `useForm<DealInputs>()` in `ProductionHubClient`. Never create a new `useForm()` in a section component or in `DealBuilder`. Use `<Controller>` with the `control` prop passed from the parent.
 4. **`DealInputs.investors` is always `[]` in Firestore.** Do not read investors from the deal form or saved deal to drive investor returns — always bridge from `useInvestors()` at the `modelOutput` useMemo call site.
-5. **`stripUndefined()` before every Firestore write.** Firestore rejects documents with `undefined` values. All saves in `firestore.ts` go through `stripUndefined<T>()`.
+5. **Remove undefined fields before callable mutations.** Firestore rejects documents with `undefined` values. Client saves go through the JSON-cleaned callable boundary; backend writes must omit absent fields.
 6. **`/deal-room` is outside `(app)/` by design.** No auth requirement. Investors access it via a private token URL. Do not move it inside `(app)/`.
 7. **Zustand is UI state only.** `useDealStore` tracks guided mode UI state across page refreshes. Deal data lives in Firestore via `useDealInputs` + react-hook-form. Do not store deal data in Zustand.
 8. **Do not add Firebase imports in server components.** Always guard with `typeof window` or use client components.
@@ -44,7 +44,7 @@ const liveDeal = { ...dealInputs, ...liveFormValues, investors: bridgedInvestors
 - **My Productions** (default): Grid of production cards the user owns
 - **My Investments** (`?view=investments`): Placeholder for investor view (feature stub)
 
-**Production CRUD:** Create dialog with name, status, optional subtitle/venue. Delete confirmation dialog — currently deletes only the root production document; subcollections and Storage files are **not cascade-deleted** (known gap).
+**Production CRUD:** Create dialog with name, status, optional subtitle/venue. The callable backend fences production deletion, retires and scrubs room tokens, removes child records and Storage files, then retains a minimal identifier reservation. A failure keeps the fenced production visible on the dashboard with a deletion retry action; retry resumes cleanup.
 
 ### Deal Builder Architecture
 
