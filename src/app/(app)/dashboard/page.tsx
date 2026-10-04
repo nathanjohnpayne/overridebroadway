@@ -6,7 +6,6 @@ import Image from "next/image";
 import { useProductions } from "@/hooks/useProductions";
 import { useAuth } from "@/contexts/AuthContext";
 import { createProduction, deleteProduction } from "@/lib/firestore";
-import { deleteProductionFiles } from "@/lib/storage";
 import { Analytics } from "@/lib/analytics";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
@@ -88,19 +87,7 @@ export default function DashboardPage() {
     setDeleting(true);
     try {
       await deleteProduction(deleteTarget.id, user.uid);
-      // Uploaded files are cleaned up best-effort; a failure here must not
-      // report the (already completed) production delete as failed.
-      const failedFiles = await deleteProductionFiles(user.uid, deleteTarget.id);
-      if (failedFiles === 0) {
-        toast.success(`"${deleteTarget.name}" deleted.`);
-      } else {
-        console.warn(
-          failedFiles < 0
-            ? `Production ${deleteTarget.id} deleted; uploaded files could not be listed for cleanup.`
-            : `Production ${deleteTarget.id} deleted; ${failedFiles} uploaded file(s) could not be removed.`
-        );
-        toast.warning(`"${deleteTarget.name}" deleted, but some uploaded files could not be removed.`);
-      }
+      toast.success(`"${deleteTarget.name}" deleted.`);
       setDeleteTarget(null);
     } catch {
       // deleteProduction is safe to re-run: each step only deletes what is
@@ -236,7 +223,7 @@ export default function DashboardPage() {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
           {displayedProductions.map(prod => (
             <div key={prod.id} className="relative group rounded-xl border ring-0 shadow-sm hover:shadow-md transition-shadow">
-              <Link href={`/productions/view?id=${prod.id}`}>
+              <Link href={prod.deleting ? "#" : `/productions/view?id=${prod.id}`} onClick={e => { if (prod.deleting) { e.preventDefault(); setDeleteTarget(prod); } }}>
                 <Card className="cursor-pointer h-full pt-0 overflow-hidden border-0 shadow-none">
                   {prod.artworkUrl ? (
                     <ArtworkBanner url={prod.artworkUrl} alt={prod.name} />
@@ -253,13 +240,13 @@ export default function DashboardPage() {
                         {prod.venue && <p className="text-xs text-muted-foreground">{prod.venue}</p>}
                       </div>
                       <Badge className={STATUS_COLORS[prod.status] + " text-xs capitalize shrink-0"} variant="outline">
-                        {prod.status}
+                        {prod.deleting ? "Deletion pending" : prod.status}
                       </Badge>
                     </div>
                   </CardHeader>
                   <CardContent className="flex items-center justify-between text-xs text-muted-foreground">
                     <span>Updated {prod.updatedAt.toLocaleDateString()}</span>
-                    <ChevronRight className="h-4 w-4" />
+                    {prod.deleting ? <span className="font-medium text-destructive">Retry deletion</span> : <ChevronRight className="h-4 w-4" />}
                   </CardContent>
                 </Card>
               </Link>

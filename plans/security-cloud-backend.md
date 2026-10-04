@@ -11,3 +11,5 @@ Before cutover, inventory all objects under `productions/{uid}/` and set each us
 Production IDs and tokens deleted before this release cannot be retrospectively reserved from current Firestore alone. If historical tokens or production IDs must remain unusable, recover their inventory from backups/audit records and create reservations before cutover. No historical backfill or production mutation is performed by this PR.
 
 Validate callable authentication, ordinary producer save and deletion, share/deactivate/reactivate, new immutable uploads, expired/replayed upload denial, quota boundaries and deployment readback in a staging project first. Public account creation still permits Sybil accounts; per-user quotas do not claim a project-wide spending cap.
+
+Production deletion performs Storage prefix cleanup inside the same backend request. A failed cleanup leaves the production fenced and visible for retry; completion writes the hidden tombstone only after both Firestore and Storage cleanup succeed. File retirement invalidates upload reservations before removing objects; superseded-file cleanup paths survive failed deletion for retry on the next save.

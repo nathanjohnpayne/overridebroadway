@@ -41,7 +41,7 @@ export function subscribeToProductions(
     orderBy("updatedAt", "desc")
   );
   return onSnapshot(q, (snap) => {
-    const productions = snap.docs.filter((d) => !d.data().deleted && !d.data().deleting).map((d) => {
+    const productions = snap.docs.filter((d) => !d.data().deleted).map((d) => {
       const data = d.data();
       return {
         id: d.id,
@@ -261,16 +261,7 @@ export async function assignInvestorsToDefaultPool(
   productionId: string,
   poolId: string
 ): Promise<void> {
-  const snap = await getDocs(
-    collection(db, "productions", productionId, "investors")
-  );
-  const updates: Promise<void>[] = [];
-  for (const d of snap.docs) {
-    if (!d.data().producerPoolId) {
-      updates.push(mutate({ action: "update", collection: "investors", productionId, id: d.id, data: { producerPoolId: poolId } }).then(() => undefined));
-    }
-  }
-  await Promise.all(updates);
+  await mutate({ action: "assignDefaultPool", productionId, id: poolId });
 }
 
 // ─── Deal Rooms ───────────────────────────────────────────────────────────────

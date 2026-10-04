@@ -112,7 +112,7 @@ dealRooms/{token}                 # top-level collection; token = document ID = 
 ```
 
 **Security rules:**
-- Productions and subcollections: `request.auth.uid == resource.data.userId`; client writes are denied and backend ownership is immutable
+- Production reads compare `request.auth.uid` with the production `userId`; subcollection reads check the parent production owner and deletion fence. Client writes are denied and backend ownership is immutable
 - Deal rooms: public `get` by token when `isActive == true`; the owner can always `get`; `list`/queries are owner-only. Create requires owning the referenced production and a validated shape (key allowlist, `producerNote` ≤ 500, no individual investors); `ownedByUserId`, `productionId` and `createdAt` are immutable
 - Storage: owner-only under `productions/{uid}/…`; uploads require a backend reservation, use immutable object paths, and remain limited to PDF or PNG/JPEG/WebP/GIF, ≤ 20MB
 - Rules tests: `npm run test:rules` (Firestore + Storage emulators via `firebase emulators:exec`; needs Java). CI runs them in `.github/workflows/repo_lint_local.yml`

@@ -22,7 +22,7 @@ beforeEach(async () => {
   await env.clearFirestore();
   time = 1800000000000;
   service = createService({ db, Timestamp, FieldValue, HttpsError, now: () => time,
-    bucket: { file: () => ({ delete: async () => {} }) } });
+    bucket: { name: "demo-bucket", deleteFiles: async () => {}, file: () => ({ delete: async () => {} }) } });
   await db.doc("productions/alice-prod").set({ userId: "alice", name: "Alice" });
   await db.doc("productions/bob-prod").set({ userId: "bob", name: "Bob" });
 });
@@ -95,8 +95,53 @@ describe("trusted quota mutations", () => {
     expect(results.filter(r => r.status === "fulfilled")).toHaveLength(1);
     const success = results.find(r => r.status === "fulfilled");
     if (success?.status === "fulfilled") await service("alice", { action: "deleteFile", path: success.value.path });
+    expect((await db.collection("uploadReservations").get()).size).toBe(0);
     expect((await db.doc("mutationQuotas/alice").get()).data().files).toBe(100);
     await expect(service("alice", input)).rejects.toMatchObject({ code: "resource-exhausted" });
+  });
+  it("migrates 200 legacy investors in one mutation without changing assigned investors", async () => {
+    await db.doc("productions/alice-prod/producerPools/direct").set({ name: "Direct" });
+    const batch = db.batch();
+    for (let i = 0; i < 200; i++) batch.set(db.doc(`productions/alice-prod/investors/i-${i}`), { name: "Legacy", ...(i === 0 ? { producerPoolId: "other" } : {}) });
+    await batch.commit();
+    await service("alice", { action: "assignDefaultPool", productionId: "alice-prod", id: "direct" });
+    const investors = await db.collection("productions/alice-prod/investors").get();
+    expect(investors.docs.filter((d: { data(): { producerPoolId?: string } }) => d.data().producerPoolId === "direct")).toHaveLength(199);
+    expect((await db.doc("mutationQuotas/alice").get()).data().recent).toHaveLength(1);
+    await expect(service("bob", { action: "assignDefaultPool", productionId: "alice-prod", id: "direct" })).rejects.toMatchObject({ code: "permission-denied" });
+  });
+  it("retires replaced objects and retries cleanup after a failed Storage deletion", async () => {
+    const oldPath = "productions/alice/alice-prod/uploads/old-file";
+    const oldUrl = `https://firebasestorage.googleapis.com/v0/b/demo-bucket/o/${encodeURIComponent(oldPath)}?token=old`;
+    await db.doc("productions/alice-prod").update({ artworkUrl: oldUrl });
+    await db.doc("uploadReservations/old-file").set({ uid: "alice", path: oldPath });
+    let failDelete = true;
+    const deleted: string[] = [];
+    const replace = createService({ db, Timestamp, FieldValue, HttpsError, now: () => time, bucket: { name: "demo-bucket", file: (path: string) => ({ delete: async () => { if (failDelete) throw new Error("Storage unavailable"); deleted.push(path); } }) } });
+    const input = { action: "update", collection: "productions", id: "alice-prod", data: { artworkUrl: "https://example.test/new" } };
+    await expect(replace("alice", input)).rejects.toThrow("Storage unavailable");
+    expect((await db.doc("uploadReservations/old-file").get()).exists).toBe(false);
+    expect((await db.doc("productions/alice-prod").get()).data().cleanupPaths).toEqual([oldPath]);
+    failDelete = false;
+    await replace("alice", input);
+    expect(deleted).toEqual([oldPath]);
+    expect((await db.doc("productions/alice-prod").get()).data().cleanupPaths).toEqual([]);
+  });
+  it("keeps a failed production deletion fenced for retry and cleans 100 files in one operation", async () => {
+    await db.doc("dealRooms/legacy-no-timestamp").set({ productionId: "alice-prod", ownedByUserId: "alice", isActive: true });
+    let failCleanup = true;
+    const prefixes: string[] = [];
+    const remove = createService({ db, Timestamp, FieldValue, HttpsError, now: () => time, bucket: { deleteFiles: async ({ prefix }: { prefix: string }) => { if (failCleanup) throw new Error("Storage unavailable"); prefixes.push(prefix); } } });
+    const batch = db.batch();
+    for (let i = 0; i < 100; i++) batch.set(db.doc(`uploadReservations/file-${i}`), { uid: "alice", productionId: "alice-prod" });
+    await batch.commit();
+    await expect(remove("alice", { action: "deleteProduction", productionId: "alice-prod" })).rejects.toThrow("Storage unavailable");
+    expect((await db.doc("productions/alice-prod").get()).data()).toMatchObject({ name: "Alice", deleting: true });
+    expect((await db.collection("uploadReservations").get()).size).toBe(0);
+    failCleanup = false;
+    await remove("alice", { action: "deleteProduction", productionId: "alice-prod" });
+    expect(prefixes).toEqual(["productions/alice/alice-prod/"]);
+    expect((await db.doc("mutationQuotas/alice").get()).data().recent).toHaveLength(2);
   });
   it("allows the exact byte boundary and rejects overflow, malformed type, and cross-owner uploads", async () => {
     await db.doc("mutationQuotas/alice").set({ files: 0, bytes: 500 * 1024 * 1024 - 1024 });

@@ -2,7 +2,7 @@ import { getFunctions, httpsCallable } from "firebase/functions";
 import { getApp } from "firebase/app";
 
 export interface MutationRequest {
-  action: "create" | "set" | "update" | "delete" | "ensure" | "deleteProduction" | "reserveUpload" | "deleteFile";
+  action: "create" | "set" | "update" | "delete" | "ensure" | "deleteProduction" | "reserveUpload" | "deleteFile" | "assignDefaultPool";
   collection?: string;
   id?: string;
   productionId?: string;

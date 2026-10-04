@@ -39,6 +39,27 @@ function createService({ db, bucket, Timestamp, FieldValue, HttpsError, now = Da
       tx.set(ref, { recent: [...recent, time] }, { merge: true });
     });
   }
+  async function retireFile(uid, path) {
+    const match = path.match(/^productions\/[^/]+\/[^/]+\/uploads\/([A-Za-z0-9_-]+)$/);
+    if (match) {
+      const ref = db.doc(`uploadReservations/${match[1]}`);
+      await db.runTransaction(async tx => {
+        const reservation = (await tx.get(ref)).data();
+        if (reservation?.uid === uid && reservation.path === path) tx.delete(ref);
+      });
+    }
+    await bucket.file(path).delete({ ignoreNotFound: true });
+  }
+  function ownedObjectPath(uid, productionId, url) {
+    if (typeof url !== 'string') return null;
+    try {
+      const parsed = new URL(url);
+      const prefix = `/v0/b/${bucket.name}/o/`;
+      if (parsed.hostname !== 'firebasestorage.googleapis.com' || !parsed.pathname.startsWith(prefix)) return null;
+      const path = decodeURIComponent(parsed.pathname.slice(prefix.length));
+      return path.startsWith(`productions/${uid}/${productionId}/`) && !path.includes('..') ? path : null;
+    } catch { return null; }
+  }
   return async (uid, input) => {
     object(input); identifier(uid);
     if (Buffer.byteLength(JSON.stringify(input)) > 64 * 1024) fail('invalid-argument', 'Request is too large.');
@@ -66,7 +87,19 @@ function createService({ db, bucket, Timestamp, FieldValue, HttpsError, now = Da
     }
     if (input.action === 'deleteFile') {
       if (typeof input.path !== 'string' || !input.path.startsWith(`productions/${uid}/`) || input.path.includes('..')) fail('permission-denied', 'Invalid file path.');
-      await bucket.file(input.path).delete({ ignoreNotFound: true });
+      await retireFile(uid, input.path);
+      return {};
+    }
+    if (input.action === 'assignDefaultPool') {
+      const productionId = identifier(input.productionId), poolId = identifier(input.id);
+      await db.runTransaction(async tx => {
+        await own(tx, uid, productionId);
+        const pool = await tx.get(db.doc(`productions/${productionId}/producerPools/${poolId}`));
+        if (!pool.exists) fail('not-found', 'Pool is unavailable.');
+        const investors = await tx.get(db.collection(`productions/${productionId}/investors`).limit(LIMITS.investors + 1));
+        if (investors.size > LIMITS.investors) fail('resource-exhausted', 'Legacy investors exceed the migration limit.');
+        for (const investor of investors.docs) if (!investor.data().producerPoolId) tx.update(investor.ref, { producerPoolId: poolId, updatedAt: FieldValue.serverTimestamp() });
+      });
       return {};
     }
     if (input.action === 'deleteProduction') {
@@ -78,7 +111,10 @@ function createService({ db, bucket, Timestamp, FieldValue, HttpsError, now = Da
         if (!snap.data().deleted) tx.update(productionRef, { deleting: true, updatedAt: FieldValue.serverTimestamp() });
       });
       const rooms = await db.collection('dealRooms').where('productionId', '==', productionId).where('ownedByUserId', '==', uid).get();
-      for (const r of rooms.docs) await r.ref.set({ productionId, ownedByUserId: uid, retired: true, isActive: false, createdAt: r.data().createdAt, updatedAt: FieldValue.serverTimestamp() });
+      for (const r of rooms.docs) {
+        const createdAt = r.data().createdAt;
+        await r.ref.set({ productionId, ownedByUserId: uid, retired: true, isActive: false, ...(createdAt ? { createdAt } : {}), updatedAt: FieldValue.serverTimestamp() });
+      }
       for (const collection of ['dealInputs', 'scenarios', 'investors', 'producerPools']) {
         const children = await productionRef.collection(collection).get();
         for (let i = 0; i < children.docs.length; i += 400) {
@@ -87,6 +123,14 @@ function createService({ db, bucket, Timestamp, FieldValue, HttpsError, now = Da
           await batch.commit();
         }
       }
+      // Invalidate authorizations before deleting objects so replay cannot recreate them.
+      const reservations = await db.collection('uploadReservations').where('uid', '==', uid).where('productionId', '==', productionId).get();
+      for (let i = 0; i < reservations.docs.length; i += 400) {
+        const batch = db.batch();
+        for (const reservation of reservations.docs.slice(i, i + 400)) batch.delete(reservation.ref);
+        await batch.commit();
+      }
+      await bucket.deleteFiles({ prefix: `productions/${uid}/${productionId}/`, force: true });
       await productionRef.set({ userId: uid, deleted: true, deleting: true, updatedAt: FieldValue.serverTimestamp() });
       return {};
     }
@@ -100,16 +144,27 @@ function createService({ db, bucket, Timestamp, FieldValue, HttpsError, now = Da
       if (!Number.isFinite(millis)) fail('invalid-argument', 'Invalid expiry.');
       data.expiresAt = Timestamp.fromMillis(millis);
     }
-    if (['__proto__', 'constructor', 'prototype', 'deleted', 'deleting', 'retired', 'createdAt', 'updatedAt'].some(k => Object.hasOwn(data, k))) fail('invalid-argument', 'Reserved field.');
+    if (['__proto__', 'constructor', 'prototype', 'deleted', 'deleting', 'retired', 'createdAt', 'updatedAt', 'cleanupPaths'].some(k => Object.hasOwn(data, k))) fail('invalid-argument', 'Reserved field.');
     const id = collection === 'users' ? uid : input.action === 'create' ? uuid() : identifier(input.id);
     if (collection === 'dealInputs' && id !== 'primary') fail('invalid-argument', 'Invalid deal input id.');
     const child = ['dealInputs', 'scenarios', 'investors', 'producerPools'].includes(collection);
     const parent = child ? `productions/${identifier(input.productionId)}/` : '';
     const ref = db.doc(`${parent}${collection}/${id}`);
+    let cleanupPaths = [];
     await db.runTransaction(async tx => {
       // Serialize all allocations for one user, including first legacy allocations.
       const quotaRef = db.doc(`mutationQuotas/${uid}`), quotaSnap = await tx.get(quotaRef);
       const existing = await tx.get(ref), old = existing.data();
+      cleanupPaths = [...(old?.cleanupPaths || [])];
+      if (collection === 'productions' || collection === 'investors') {
+        const productionId = collection === 'productions' ? id : input.productionId;
+        for (const key of Object.keys(data).filter(k => k.endsWith('Url'))) {
+          if (old?.[key] !== data[key]) {
+            const path = ownedObjectPath(uid, productionId, old?.[key]);
+            if (path && !cleanupPaths.includes(path)) cleanupPaths.push(path);
+          }
+        }
+      }
       if (child) await own(tx, uid, input.productionId);
       if (collection === 'productions') {
         if (existing.exists && (old.userId !== uid || old.deleted || old.deleting)) fail('permission-denied', 'Production is unavailable.');
@@ -145,11 +200,19 @@ function createService({ db, bucket, Timestamp, FieldValue, HttpsError, now = Da
       if (input.action === 'delete') tx.delete(ref);
       else {
         const payload = { ...data, updatedAt: FieldValue.serverTimestamp() };
+        if (cleanupPaths.length) payload.cleanupPaths = cleanupPaths;
         if (!existing.exists) payload.createdAt = FieldValue.serverTimestamp();
         if (collection === 'productions') payload.userId = uid;
         tx.set(ref, payload, { merge: true });
       }
     });
+    for (const path of cleanupPaths) await retireFile(uid, path);
+    if (cleanupPaths.length && input.action !== 'delete') {
+      await db.runTransaction(async tx => {
+        const current = await tx.get(ref);
+        if (current.exists) tx.update(ref, { cleanupPaths: (current.data().cleanupPaths || []).filter(p => !cleanupPaths.includes(p)) });
+      });
+    }
     return { id };
   };
 }

@@ -12,7 +12,7 @@ The approved user limits are 20 productions, 200 investors and 20 scenarios per 
 
 Production reservations count toward the 20-production limit even after deletion. File reservations count toward both upload limits even after expiry, failure, replacement or deletion. This conservative allocation accounting prevents concurrent upload, deletion and replay from freeing quota prematurely. Reclamation requires a separate trusted reconciliation procedure; the client cannot release quota. This deliberately bounds permanent reservation metadata as well as live objects.
 
-Each upload uses a server-generated unique path, a 15-minute reservation, an exact byte/type bound, and a create-only Storage rule. Replaying a reservation cannot overwrite an object. Direct client deletes are denied; backend deletes consume the mutation budget. File content-type declarations do not constitute malware scanning.
+Each upload uses a server-generated unique path, a 15-minute reservation, an exact byte/type bound, and a create-only Storage rule. Replaying a reservation cannot overwrite an object. Deleting an object invalidates its reservation before removing its bytes. Superseded production and investor files are retired after their record updates; failed cleanup remains recorded for retry. Production cleanup and legacy investor assignment each consume one bulk mutation rather than one request per file or investor. Fenced productions remain visible on the dashboard with a deletion retry action until cleanup succeeds. Direct client deletes are denied; backend deletes consume the mutation budget. File content-type declarations do not constitute malware scanning.
 
 ## Acceptance criteria
 

@@ -2,8 +2,6 @@ import {
   ref,
   uploadBytesResumable,
   getDownloadURL,
-  listAll,
-  type StorageReference,
 } from "firebase/storage";
 import { storage } from "./firebase";
 import { mutate } from "./mutations";
@@ -164,29 +162,4 @@ export async function uploadInvestorDocument(
 
 export async function deleteFile(path: string): Promise<void> {
   await mutate({ action: "deleteFile", path });
-}
-
-async function collectFiles(dir: StorageReference): Promise<StorageReference[]> {
-  const res = await listAll(dir);
-  const nested = await Promise.all(res.prefixes.map((p) => collectFiles(p)));
-  return [...res.items, ...nested.flat()];
-}
-
-/**
- * Best-effort removal of every file uploaded for a production
- * (productions/{userId}/{productionId}/**). Returns the number of files that
- * could not be deleted; never throws.
- */
-export async function deleteProductionFiles(
-  userId: string,
-  productionId: string
-): Promise<number> {
-  try {
-    const files = await collectFiles(ref(storage, `productions/${userId}/${productionId}`));
-    const results = await Promise.allSettled(files.map((f) => deleteFile(f.fullPath)));
-    return results.filter((r) => r.status === "rejected").length;
-  } catch (err) {
-    console.error("Failed to list production files for cleanup:", err);
-    return -1;
-  }
 }

@@ -150,10 +150,10 @@ productions/{userId}/{productionId}/
 
 **Firestore:**
 - Deal inputs saved under fixed document ID `"primary"` within `dealInputs` subcollection
-- Client mutation payloads remove undefined fields before the callable request; backend writes add trusted timestamps
+- Client mutation payloads remove undefined fields before the callable request; record writes set server `updatedAt` and, for new records, `createdAt`
 - Zustand persist key changed from `"broadway-deal-draft"` to `"deal-builder-ui"` — old key is defunct
 - Deal room documents are in the **top-level** `dealRooms` collection, not a subcollection of productions
-- `deleteProduction(productionId, ownerUserId)` uses the authenticated callable backend. It fences writes before cleanup, scrubs and permanently retires room tokens, deletes child records, and retains a minimal production reservation. Storage cleanup is best effort. Identifier reservations cannot be reassigned.
+- `deleteProduction(productionId, ownerUserId)` uses the authenticated callable backend. It fences writes before cleanup, scrubs and permanently retires room tokens, deletes child records, and retains a minimal production reservation. Storage cleanup runs in the same backend request; failures keep the fenced production visible for deletion retry. Identifier reservations cannot be reassigned.
 
 **UI:**
 - Recharts Tooltip `formatter` props use `unknown` types — cast with `Number(v)` and `String(name)`

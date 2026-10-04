@@ -65,6 +65,15 @@ beforeEach(() => {
 });
 
 describe("snapshot listeners", () => {
+  it("keeps fenced productions visible for deletion retry while hiding completed tombstones", () => {
+    const callback = vi.fn();
+    subscribeToProductions("user-1", callback);
+    mockOnSnapshot.mock.calls[0][1]({ docs: [
+      { id: "pending", data: () => ({ userId: "user-1", name: "Pending", deleting: true }) },
+      { id: "deleted", data: () => ({ userId: "user-1", deleted: true, deleting: true }) },
+    ] });
+    expect(callback.mock.calls[0][0]).toEqual([expect.objectContaining({ id: "pending", deleting: true })]);
+  });
   it.each([
     ["productions", () => subscribeToProductions("user-1", vi.fn(), onError)],
     ["investors", () => subscribeToInvestors("prod-1", vi.fn(), onError)],
