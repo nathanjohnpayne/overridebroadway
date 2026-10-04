@@ -174,8 +174,8 @@ describe("dealRooms read access", () => {
 });
 
 describe("dealRooms create", () => {
-  it("allows the owner of the production to create a room", async () => {
-    await assertSucceeds(db("alice").collection("dealRooms").add(newRoomPayload()));
+  it("denies direct room creation even by the production owner", async () => {
+    await assertFails(db("alice").collection("dealRooms").add(newRoomPayload()));
   });
 
   it("denies creating a room for a production the caller does not own", async () => {
@@ -212,7 +212,7 @@ describe("dealRooms create", () => {
         .collection("dealRooms")
         .add(newRoomPayload({ config: { ...baseConfig, producerNote: "x".repeat(501) } }))
     );
-    await assertSucceeds(
+    await assertFails(
       db("alice")
         .collection("dealRooms")
         .add(newRoomPayload({ config: { ...baseConfig, producerNote: "x".repeat(500) } }))
@@ -244,7 +244,7 @@ describe("dealRooms create", () => {
     await assertFails(
       db("alice").collection("dealRooms").add(newRoomPayload({ production: withDocs }))
     );
-    await assertSucceeds(
+    await assertFails(
       db("alice")
         .collection("dealRooms")
         .add(newRoomPayload({ production: withDocs, config: { ...baseConfig, showDocuments: true } }))
@@ -261,20 +261,20 @@ describe("dealRooms create", () => {
 });
 
 describe("dealRooms update/delete", () => {
-  it("allows the owner to deactivate and reactivate", async () => {
+  it("denies direct room activation changes", async () => {
     const ref = db("alice").doc("dealRooms/active-room");
-    await assertSucceeds(
+    await assertFails(
       ref.update({ isActive: false, updatedAt: firebase.firestore.FieldValue.serverTimestamp() })
     );
-    await assertSucceeds(
+    await assertFails(
       db("alice")
         .doc("dealRooms/inactive-room")
         .update({ isActive: true, updatedAt: firebase.firestore.FieldValue.serverTimestamp() })
     );
   });
 
-  it("allows the owner to re-snapshot config, production and deal inputs", async () => {
-    await assertSucceeds(
+  it("denies direct snapshot updates", async () => {
+    await assertFails(
       db("alice").doc("dealRooms/active-room").update({
         config: { ...baseConfig, showDocuments: true, producerNote: "Hello" },
         production: {
@@ -309,7 +309,7 @@ describe("dealRooms update/delete", () => {
         updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
       })
     );
-    await assertSucceeds(
+    await assertFails(
       ref.update({
         config: baseConfig,
         production: { name: "Alice Show", status: "open" },
@@ -318,7 +318,7 @@ describe("dealRooms update/delete", () => {
     );
   });
 
-  it("still lets the owner deactivate a legacy room that carries document URLs", async () => {
+  it("denies direct deactivation of legacy rooms", async () => {
     await testEnv.withSecurityRulesDisabled(async (ctx) => {
       await ctx.firestore().doc("dealRooms/legacy-room").set(
         seededRoom({
@@ -326,7 +326,7 @@ describe("dealRooms update/delete", () => {
         })
       );
     });
-    await assertSucceeds(
+    await assertFails(
       db("alice")
         .doc("dealRooms/legacy-room")
         .update({ isActive: false, updatedAt: firebase.firestore.FieldValue.serverTimestamp() })
@@ -346,7 +346,7 @@ describe("dealRooms update/delete", () => {
     await assertFails(
       ref.update({ isActive: true, updatedAt: firebase.firestore.FieldValue.serverTimestamp() })
     );
-    await assertSucceeds(
+    await assertFails(
       ref.update({
         isActive: true,
         production: { name: "Alice Show", status: "open" },
@@ -373,7 +373,7 @@ describe("dealRooms update/delete", () => {
     );
     // The shape DealRoomSetup's Reactivate writes: config + sanitized
     // production + sanitized deal inputs.
-    await assertSucceeds(
+    await assertFails(
       ref.update({
         isActive: true,
         config: baseConfig,
@@ -414,14 +414,14 @@ describe("dealRooms update/delete", () => {
     await assertFails(db().doc("dealRooms/active-room").update({ isActive: false }));
   });
 
-  it("allows the owner to delete", async () => {
-    await assertSucceeds(db("alice").doc("dealRooms/active-room").delete());
+  it("denies direct owner deletion", async () => {
+    await assertFails(db("alice").doc("dealRooms/active-room").delete());
   });
 });
 
 describe("productions ownership", () => {
-  it("allows the owner to update their production", async () => {
-    await assertSucceeds(db("alice").doc("productions/prod-alice").update({ name: "Renamed" }));
+  it("denies direct production updates", async () => {
+    await assertFails(db("alice").doc("productions/prod-alice").update({ name: "Renamed" }));
   });
 
   it("denies the owner reassigning userId", async () => {
@@ -433,11 +433,11 @@ describe("productions ownership", () => {
     await assertFails(db("bob").doc("productions/prod-alice").update({ name: "x" }));
   });
 
-  it("lets the owner delete subcollection docs and then the production", async () => {
+  it("denies direct deletion of subcollections and productions", async () => {
     await testEnv.withSecurityRulesDisabled(async (ctx) => {
       await ctx.firestore().doc("productions/prod-alice/investors/i1").set({ name: "Jane" });
     });
-    await assertSucceeds(db("alice").doc("productions/prod-alice/investors/i1").delete());
-    await assertSucceeds(db("alice").doc("productions/prod-alice").delete());
+    await assertFails(db("alice").doc("productions/prod-alice/investors/i1").delete());
+    await assertFails(db("alice").doc("productions/prod-alice").delete());
   });
 });

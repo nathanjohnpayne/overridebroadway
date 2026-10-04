@@ -61,7 +61,7 @@ publicly accessible -- the token IS the access credential.
 - "Deactivate Link" sets `isActive: false`, making the URL return a "no longer
   active" message.
 - "Reactivate Link" restores access. The owner can always read their own room (active or not), so an inactive room stays manageable from the production hub.
-- Deleting a production deletes its deal rooms, its subcollections, and (best effort) its uploaded files.
+- Deleting a production fences writes, retires and scrubs its deal rooms, removes its subcollections, and retains a minimal permanent production reservation. Uploaded files are removed by the same backend operation; failures leave the fenced production available for deletion retry. Retired room tokens cannot be reactivated or reassigned.
 
 ### FR-5: No-Auth Investor Access
 

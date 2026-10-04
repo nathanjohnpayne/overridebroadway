@@ -23,6 +23,9 @@ const {
   txSet: vi.fn(),
 }));
 
+const { mockMutate } = vi.hoisted(() => ({ mockMutate: vi.fn(() => Promise.resolve({})) }));
+vi.mock("@/lib/mutations", () => ({ mutate: mockMutate, createRecord: vi.fn() }));
+
 vi.mock("@/lib/firebase", () => ({ db: {} }));
 
 vi.mock("firebase/firestore", () => ({
@@ -62,6 +65,15 @@ beforeEach(() => {
 });
 
 describe("snapshot listeners", () => {
+  it("keeps fenced productions visible for deletion retry while hiding completed tombstones", () => {
+    const callback = vi.fn();
+    subscribeToProductions("user-1", callback);
+    mockOnSnapshot.mock.calls[0][1]({ docs: [
+      { id: "pending", data: () => ({ userId: "user-1", name: "Pending", deleting: true }) },
+      { id: "deleted", data: () => ({ userId: "user-1", deleted: true, deleting: true }) },
+    ] });
+    expect(callback.mock.calls[0][0]).toEqual([expect.objectContaining({ id: "pending", deleting: true })]);
+  });
   it.each([
     ["productions", () => subscribeToProductions("user-1", vi.fn(), onError)],
     ["investors", () => subscribeToInvestors("prod-1", vi.fn(), onError)],
@@ -87,18 +99,9 @@ describe("ensureDefaultPool", () => {
     const id = await ensureDefaultPool("prod-1", "user-1");
 
     expect(id).toBe(DEFAULT_POOL_ID);
-    expect(mockDoc).toHaveBeenCalledWith(
-      {},
-      "productions",
-      "prod-1",
-      "producerPools",
-      DEFAULT_POOL_ID,
-    );
-    expect(txSet).toHaveBeenCalledTimes(1);
-    expect(txSet.mock.calls[0][1]).toMatchObject({
-      productionId: "prod-1",
-      ownerUserId: "user-1",
-      name: "Direct Investors",
+    expect(mockMutate).toHaveBeenCalledWith({
+      action: "ensure", collection: "producerPools", productionId: "prod-1", id: DEFAULT_POOL_ID,
+      data: { productionId: "prod-1", ownerUserId: "user-1", name: "Direct Investors" },
     });
   });
 
@@ -109,7 +112,7 @@ describe("ensureDefaultPool", () => {
     const id = await ensureDefaultPool("prod-1", "user-1");
 
     expect(id).toBe(DEFAULT_POOL_ID);
-    expect(txSet).not.toHaveBeenCalled();
+    expect(mockMutate).toHaveBeenCalledWith(expect.objectContaining({ action: "ensure", id: DEFAULT_POOL_ID }));
   });
 
   it("keeps using a legacy auto-id Direct Investors pool", async () => {

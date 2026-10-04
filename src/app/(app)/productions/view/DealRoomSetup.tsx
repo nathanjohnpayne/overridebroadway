@@ -188,11 +188,7 @@ export function DealRoomSetup({
         isActive: true,
       });
 
-      // Save token back to production record for quick lookup
-      await updateProduction(production.id, {
-        dealRoomEnabled: true,
-        dealRoomToken: token,
-      });
+      // The backend saves the token atomically with room creation.
       onProductionUpdated({ dealRoomEnabled: true, dealRoomToken: token });
 
       // Fetch the full record back so we have createdAt / updatedAt
@@ -288,9 +284,6 @@ export function DealRoomSetup({
     setDeactivating(true);
     try {
       await deactivateDealRoom(dealRoom.id);
-      await updateProduction(production.id, {
-        dealRoomEnabled: false,
-      });
       onProductionUpdated({ dealRoomEnabled: false });
       setDealRoom((prev) => (prev ? { ...prev, isActive: false } : prev));
       Analytics.dealRoomDeactivated(production.id);
@@ -319,7 +312,6 @@ export function DealRoomSetup({
         production: productionSnapshot,
         dealInputs: dealInputsSnapshot,
       });
-      await updateProduction(production.id, { dealRoomEnabled: true });
       onProductionUpdated({ dealRoomEnabled: true });
       setDealRoom((prev) =>
         prev

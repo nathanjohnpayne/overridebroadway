@@ -2,11 +2,16 @@ import {
   ref,
   uploadBytesResumable,
   getDownloadURL,
-  deleteObject,
-  listAll,
-  type StorageReference,
 } from "firebase/storage";
 import { storage } from "./firebase";
+import { mutate } from "./mutations";
+
+async function reserveUpload(userId: string, productionId: string, logicalPath: string, file: File) {
+  void userId; // Ownership comes from the verified authentication token.
+  const result = await mutate({ action: "reserveUpload", productionId, logicalPath, size: file.size, contentType: file.type });
+  if (!result.path) throw new Error("The server did not reserve an upload.");
+  return ref(storage, result.path);
+}
 
 /**
  * Image types accepted for production artwork. storage.rules enforces the
@@ -29,10 +34,7 @@ export async function uploadProductionArtwork(
     throw new Error("Image must be PNG, JPEG, WebP, or GIF");
   if (file.size > 5 * 1024 * 1024) throw new Error("Image must be under 5MB");
 
-  const storageRef = ref(
-    storage,
-    `productions/${userId}/${productionId}/artwork`
-  );
+  const storageRef = await reserveUpload(userId, productionId, `artwork`, file);
   const uploadTask = uploadBytesResumable(storageRef, file);
 
   return new Promise((resolve, reject) => {
@@ -61,10 +63,7 @@ export async function uploadOperatingAgreement(
     throw new Error("Operating agreement must be a PDF");
   if (file.size > 20 * 1024 * 1024) throw new Error("PDF must be under 20MB");
 
-  const storageRef = ref(
-    storage,
-    `productions/${userId}/${productionId}/agreement.pdf`
-  );
+  const storageRef = await reserveUpload(userId, productionId, `agreement.pdf`, file);
   const uploadTask = uploadBytesResumable(storageRef, file);
 
   return new Promise((resolve, reject) => {
@@ -101,10 +100,7 @@ export async function uploadProductionDocument(
   if (file.size > 20 * 1024 * 1024)
     throw new Error("PDF must be under 20MB");
 
-  const storageRef = ref(
-    storage,
-    `productions/${userId}/${productionId}/${docType}.pdf`
-  );
+  const storageRef = await reserveUpload(userId, productionId, `${docType}.pdf`, file);
   const uploadTask = uploadBytesResumable(storageRef, file);
 
   return new Promise((resolve, reject) => {
@@ -145,10 +141,7 @@ export async function uploadInvestorDocument(
   if (file.size > 20 * 1024 * 1024)
     throw new Error("PDF must be under 20MB");
 
-  const storageRef = ref(
-    storage,
-    `productions/${userId}/${productionId}/investors/${investorId}/${docType}.pdf`
-  );
+  const storageRef = await reserveUpload(userId, productionId, `investors/${investorId}/${docType}.pdf`, file);
   const uploadTask = uploadBytesResumable(storageRef, file);
 
   return new Promise((resolve, reject) => {
@@ -168,31 +161,5 @@ export async function uploadInvestorDocument(
 }
 
 export async function deleteFile(path: string): Promise<void> {
-  const storageRef = ref(storage, path);
-  await deleteObject(storageRef);
-}
-
-async function collectFiles(dir: StorageReference): Promise<StorageReference[]> {
-  const res = await listAll(dir);
-  const nested = await Promise.all(res.prefixes.map((p) => collectFiles(p)));
-  return [...res.items, ...nested.flat()];
-}
-
-/**
- * Best-effort removal of every file uploaded for a production
- * (productions/{userId}/{productionId}/**). Returns the number of files that
- * could not be deleted; never throws.
- */
-export async function deleteProductionFiles(
-  userId: string,
-  productionId: string
-): Promise<number> {
-  try {
-    const files = await collectFiles(ref(storage, `productions/${userId}/${productionId}`));
-    const results = await Promise.allSettled(files.map((f) => deleteObject(f)));
-    return results.filter((r) => r.status === "rejected").length;
-  } catch (err) {
-    console.error("Failed to list production files for cleanup:", err);
-    return -1;
-  }
+  await mutate({ action: "deleteFile", path });
 }

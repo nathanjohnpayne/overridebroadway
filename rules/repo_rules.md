@@ -26,7 +26,7 @@ The following tool config directory must contain only configuration:
 
 **Intentionally absent directories:**
 
-- `functions/` — No Cloud Functions in this repo. The app is a pure static Next.js export. Firebase Hosting serves static files; Firestore security rules handle access control.
+- `functions/` is now present for the owner-approved quota backend (#189); see `plans/security-cloud-backend.md`. Firebase Hosting still serves the static Next.js export.
 - `dist/` — Next.js output goes to `out/`, not `dist/`. Never create a `dist/` directory.
 
 ## Forbidden Patterns

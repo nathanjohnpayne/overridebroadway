@@ -47,11 +47,6 @@ vi.mock("@/lib/firestore", () => ({
   subscribeToProductions: vi.fn(),
 }));
 
-const mockDeleteProductionFiles = vi.fn();
-vi.mock("@/lib/storage", () => ({
-  deleteProductionFiles: (...args: unknown[]) => mockDeleteProductionFiles(...args),
-}));
-
 // Mock useProductions hook
 const mockProductions: Production[] = [];
 let mockLoading = false;
@@ -331,10 +326,18 @@ describe("DashboardPage", () => {
   });
 
   describe("delete production", () => {
+    it("offers a deletion retry after reloading a fenced production", async () => {
+      const user = userEvent.setup();
+      mockProductions.push(makeProduction({ id: "pending", name: "Pending Show", deleting: true }));
+      render(<DashboardPage />);
+      await user.click(screen.getByText("Retry deletion"));
+      expect(screen.getByRole("dialog")).toBeInTheDocument();
+      await user.click(screen.getByRole("button", { name: /^delete$/i }));
+      await waitFor(() => expect(mockDeleteProduction).toHaveBeenCalledWith("pending", "user-1"));
+    });
     it("calls deleteProduction when confirmed", async () => {
       const user = userEvent.setup();
       mockDeleteProduction.mockResolvedValue(undefined);
-      mockDeleteProductionFiles.mockResolvedValue(0);
       mockProductions.push(makeProduction({ id: "del-1", name: "Doomed Show" }));
       mockLoading = false;
 
@@ -367,7 +370,6 @@ describe("DashboardPage", () => {
 
       await waitFor(() => {
         expect(mockDeleteProduction).toHaveBeenCalledWith("del-1", "user-1");
-        expect(mockDeleteProductionFiles).toHaveBeenCalledWith("user-1", "del-1");
       });
     });
   });

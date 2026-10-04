@@ -102,6 +102,8 @@ vi.mock("firebase/app", () => ({
   getApp: vi.fn(() => ({})),
 }));
 
+vi.mock("@/lib/mutations", () => ({ mutate: vi.fn(() => Promise.resolve({})) }));
+
 // Import after mocks are set up
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 
