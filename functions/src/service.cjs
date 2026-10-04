@@ -122,6 +122,7 @@ function createService({ db, bucket, Timestamp, FieldValue, HttpsError, now = Da
       if (collection === 'dealInputs' && data.investors !== undefined && (!Array.isArray(data.investors) || data.investors.length)) fail('invalid-argument', 'Deal input investors must remain empty.');
       if (collection === 'dealRooms') {
         if (existing.exists && (old.ownedByUserId !== uid || old.retired)) fail('permission-denied', 'Room is unavailable.');
+        if (!existing.exists && input.action !== 'create') fail('not-found', 'Room is unavailable.');
         if (input.action === 'delete') fail('invalid-argument', 'Deactivate the room instead.');
         const next = { ...old, ...data };
         if (next.ownedByUserId !== uid || (old && next.productionId !== old.productionId)) fail('permission-denied', 'Room owner and production cannot change.');

@@ -69,6 +69,7 @@ describe("trusted quota mutations", () => {
     await expect(service("bob", { action: "set", collection: "productions", id: "old-id", data: { name: "Reattach" } })).rejects.toMatchObject({ code: "not-found" });
   });
   it("publishes valid snapshots and retains reversible deactivation", async () => {
+    await expect(service("alice", { action: "set", collection: "dealRooms", id: "previously-deleted-token", data: room })).rejects.toMatchObject({ code: "not-found" });
     const { id } = await service("alice", { action: "create", collection: "dealRooms", data: room });
     await service("alice", { action: "update", collection: "dealRooms", id, data: { isActive: false } });
     await service("alice", { action: "update", collection: "dealRooms", id, data: { isActive: true } });
