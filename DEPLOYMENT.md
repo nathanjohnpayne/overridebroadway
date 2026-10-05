@@ -381,15 +381,18 @@ The build pipeline runs three stages automatically:
 All deploys use `op-firebase-deploy` for keyless, non-interactive service account impersonation.
 
 ```bash
-# Full deploy (hosting + Firestore rules + Storage rules)
+# Full deploy (hosting + Firestore rules + Storage rules + override-mutations functions)
 npm run deploy
 
-# Hosting only
+# Hosting only (front end; no backend changes)
 npm run deploy:hosting
 
 # Any target combo
 op-firebase-deploy --only firestore:rules
+op-firebase-deploy --only functions:override-mutations
 ```
+
+`npm run deploy` also deploys the `override-mutations` Cloud Functions codebase (the `mutate` callable, Node 22). Its `MUTATION_RUNTIME_SERVICE_ACCOUNT` parameter comes from the untracked `functions/.env.soyouthinkyouwant`, which must exist in the checkout you deploy from. `npm run deploy:hosting` ships the front end only and does not deploy backend changes (functions or rules).
 
 The script:
 1. Auto-detects the Firebase project from `.firebaserc`
@@ -446,15 +449,18 @@ firebase hosting:channel:deploy live --release-id <VERSION_ID>
 
 Or use the Firebase Console → Hosting → Release History → Roll back.
 
+Hosting rollback reverts only the static front end. It does not roll back the `mutate` function or the Firestore/Storage rules; redeploy those from a known-good commit.
+
 ## Post-Deployment Verification
 
 1. Open `overridebroadway.com` in an incognito window
 2. Sign in with email or Google OAuth — confirm authentication works
 3. Navigate to Dashboard — confirm productions load
 4. Open a production and load the Deal Builder — confirm deal inputs and model render
-5. Open a Deal Room via share link — confirm public access with no login
-6. Check browser DevTools → Console for errors
-7. Confirm `UpdateChecker` polling works (new deploy should prompt users to refresh)
+5. Save a change through the app (for example, edit deal inputs) — confirm the write succeeds through the `mutate` callable
+6. Open a Deal Room via share link — confirm public access with no login
+7. Check browser DevTools → Console for errors
+8. Confirm `UpdateChecker` polling works (new deploy should prompt users to refresh)
 
 ## CI/CD Integration
 

@@ -13,12 +13,14 @@ The 1Password-first deploy-auth model is a deliberate repository invariant. Do n
 If an `op` command fails with a sign-in or biometric error during deploy, follow the pause-and-prompt procedure in [operating-rules.md](operating-rules.md#1password-cli-authentication-failures). Do not retry or work around the failure without the human present.
 
 ```bash
-# Full deploy (hosting + Firestore rules + Storage rules)
+# Full deploy (hosting + Firestore rules + Storage rules + override-mutations functions)
 npm run deploy
 
-# Hosting only
+# Hosting only (front end; no backend changes)
 npm run deploy:hosting
 ```
+
+`npm run deploy` also deploys the `override-mutations` Cloud Functions codebase (the `mutate` callable, Node 22). Its `MUTATION_RUNTIME_SERVICE_ACCOUNT` parameter comes from the untracked `functions/.env.soyouthinkyouwant`, which must exist in the checkout you deploy from. `npm run deploy:hosting` ships the front end only and does not deploy backend changes (functions or rules). See `DEPLOYMENT.md` § Deployment Steps.
 
 **First-time setup:**
 ```bash
