@@ -74,7 +74,7 @@ tmp/
 .cache/
 
 # Editor
-.vscode/
+.vscode/*
 !.vscode/extensions.json
 .idea/
 
