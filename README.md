@@ -23,7 +23,7 @@ Override is the financial operating platform for Broadway producers—from model
 | Charts | Recharts 3 |
 | Forms | react-hook-form |
 | State | Zustand (persist middleware) |
-| Backend | Firebase (Auth, Firestore, Storage, Analytics) |
+| Backend | Firebase (Auth, Firestore, Storage, Analytics, Cloud Functions—one callable mutation backend) |
 | Hosting | Firebase Hosting |
 
 ## Getting Started
@@ -79,8 +79,8 @@ Open [http://localhost:3000](http://localhost:3000).
 | `npm run dev` | Start development server |
 | `npm run build` | Static export to `out/` (includes prebuild/postbuild scripts) |
 | `npm run lint` | Run ESLint |
-| `npm run deploy` | Deploy hosting + Firestore rules + Storage rules via keyless impersonation |
-| `npm run deploy:hosting` | Deploy hosting only via keyless impersonation |
+| `npm run deploy` | Deploy hosting + Firestore rules + Storage rules + the `override-mutations` Cloud Functions codebase via keyless impersonation (see [DEPLOYMENT.md](DEPLOYMENT.md#deployment-steps)) |
+| `npm run deploy:hosting` | Deploy hosting only via keyless impersonation; does not ship backend changes |
 
 ## Project Structure
 
@@ -93,11 +93,13 @@ src/
 ├── components/             # Shared components (analytics, update checker, shadcn/ui)
 ├── contexts/               # React context providers (auth)
 ├── hooks/                  # Custom hooks (productions, deal inputs, investors, pools)
-├── lib/                    # Firebase integration, Firestore CRUD, storage, utilities
+├── lib/                    # Firebase integration, Firestore reads, `mutate` callable client, storage, utilities
 │   └── model/              # Financial engine (calculations, scenarios, waterfall, formatters)
 ├── stores/                 # Zustand stores (UI state)
 └── types/                  # TypeScript type definitions
 ```
+
+The callable mutation backend (`mutate`) lives in `functions/` and is the only write path; see `specs/resource-quotas.md`.
 
 ## Documentation
 

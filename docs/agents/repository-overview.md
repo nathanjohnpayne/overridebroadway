@@ -5,14 +5,15 @@ Override is the financial operating platform for Broadway producers — from mod
 **Project type:** Next.js 16 App Router, `output: 'export'` (static export) + Firebase Hosting/Auth/Firestore/Storage. A Firebase callable Cloud Function enforces authenticated mutation and upload quotas; reads remain client-side.
 
 **Stack:**
-- Next.js 16.1.6 (App Router, static export)
+- Next.js 16 (`^16.3.8`; App Router, static export)
 - TypeScript 6 (strict; pinned `~6.0` because typescript-eslint 8 supports `<6.1`)
 - Tailwind CSS v4 + shadcn/ui (Radix primitives) + Lucide icons
 - Recharts 3 (charts)
 - react-hook-form (values managed via Controller + watch; zod installed but not used for form validation)
 - Zustand with persist middleware (guided mode UI state across page refreshes)
 - Sonner (toasts for auth, save, upload, and deal room flows)
-- Firebase 12 — Auth, Firestore, Storage, Analytics
+- Firebase 12 — Auth, Firestore, Storage, Analytics, Functions (client SDK calls the `mutate` callable)
+- Cloud Functions v2 — one callable mutation backend (`functions/`, codebase `override-mutations`, Node 22)
 - Firebase Hosting (static export, custom domain: overridebroadway.com)
 
 **Common commands:**
@@ -20,8 +21,8 @@ Override is the financial operating platform for Broadway producers — from mod
 npm run dev              # Local development server (http://localhost:3000)
 npm run build            # Static export → out/ (runs prebuild + postbuild scripts)
 npm run lint             # ESLint (flat config)
-npm run deploy           # Full deploy (hosting + rules + storage) via keyless impersonation
-npm run deploy:hosting   # Hosting only
+npm run deploy           # Full deploy (hosting + rules + storage + override-mutations functions) via keyless impersonation
+npm run deploy:hosting   # Hosting only (no backend changes)
 op-firebase-deploy --only firestore:rules   # Any target combo
 ```
 
@@ -80,7 +81,8 @@ src/
 ├── lib/
 │   ├── firebase.ts            # Firebase app init (browser guard)
 │   ├── analytics.ts           # Typed analytics event helpers
-│   ├── firestore.ts           # All Firestore CRUD operations
+│   ├── firestore.ts           # Firestore reads; writes delegate to mutations.ts
+│   ├── mutations.ts           # Client wrapper for the `mutate` callable (every write)
 │   ├── storage.ts             # Artwork + PDF upload helpers
 │   ├── utils.ts               # Tailwind cn() utility
 │   └── model/
@@ -113,7 +115,7 @@ dealRooms/{token}                 # top-level collection; token = document ID = 
 
 **Security rules:**
 - Production reads compare `request.auth.uid` with the production `userId`; subcollection reads check the parent production owner and deletion fence. Client writes are denied and backend ownership is immutable
-- Deal rooms: public `get` by token when `isActive == true`; the owner can always `get`; `list`/queries are owner-only. Create requires owning the referenced production and a validated shape (key allowlist, `producerNote` ≤ 500, no individual investors); `ownedByUserId`, `productionId` and `createdAt` are immutable
+- Deal rooms: public `get` by token when `isActive == true`; the owner can always `get`; `list`/queries are owner-only. Client writes are denied; the `mutate` backend requires owning the referenced production and a validated shape (key allowlist, `producerNote` ≤ 500, no individual investors), keeps `ownedByUserId` and `productionId` immutable, and owns timestamps
 - Storage: owner-only under `productions/{uid}/…`; uploads require a backend reservation, use immutable object paths, and remain limited to PDF or PNG/JPEG/WebP/GIF, ≤ 20MB
 - Rules tests: `npm run test:rules` (Firestore + Storage emulators via `firebase emulators:exec`; needs Java). CI runs them in `.github/workflows/repo_lint_local.yml`
 

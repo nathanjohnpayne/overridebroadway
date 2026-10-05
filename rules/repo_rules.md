@@ -41,7 +41,7 @@ The following tool config directory must contain only configuration:
 - **One `useForm()` instance.** The `useForm<DealInputs>()` call lives in `ProductionHubClient`. Never add a second form instance in a section component.
 - **No `"use client"` on server wrappers.** `app/(app)/productions/view/page.tsx` must remain a server component. Use the `*DynamicLoader` pattern for client-side rendering.
 - **`DealInputs.investors` is always `[]` in Firestore.** Do not read investors from the deal form — always bridge from `useInvestors()` at the model computation site.
-- **All writes go through the `mutate` callable.** Firestore rules deny every client write; use `mutate()` and its helpers in `src/lib/mutations.ts` (or the wrappers in `src/lib/firestore.ts`), never `setDoc`/`updateDoc`/`deleteDoc` or a direct Storage delete. `mutate()` JSON-serializes each request, which drops `undefined` values, and strips `createdAt`/`updatedAt` so the backend owns timestamps.
+- **All Firestore writes and Storage deletes go through the `mutate` callable; uploads are client creates authorized by a `mutate`-issued reservation.** Firestore rules deny every client write; use `mutate()` and its helpers in `src/lib/mutations.ts` (or the wrappers in `src/lib/firestore.ts`), never `setDoc`/`updateDoc`/`deleteDoc` or a direct Storage delete. `mutate()` JSON-serializes each request, which drops `undefined` values, and strips `createdAt`/`updatedAt` so the backend owns timestamps.
 
 ## High-Risk Modification Zones
 
