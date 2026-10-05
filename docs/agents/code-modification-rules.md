@@ -6,7 +6,7 @@
 - **Charts:** `recharts` only.
 - **Forms:** `react-hook-form` with `Controller`. One `useForm<DealInputs>()` instance in `ProductionHubClient` — never create a new form instance elsewhere.
 - **State:** Zustand for UI state only. Deal data lives in Firestore via `useDealInputs`.
-- **Firestore writes:** `setDoc` with `stripUndefined()` applied before every write.
+- **Firestore writes:** Through the `mutate` callable only (`src/lib/mutations.ts`, wrapped by `src/lib/firestore.ts`). Client writes are denied by the rules; JSON serialization drops `undefined` values.
 - **Static export:** Never use `useSearchParams()` directly in a server component. Use `*DynamicLoader` pattern.
 
 ### Financial Model

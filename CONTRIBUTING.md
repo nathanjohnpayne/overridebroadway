@@ -33,13 +33,13 @@ Update Firestore security rules for dealRooms collection
 
 ## Code Style
 
-- **Language:** TypeScript 5 strict. All new code must be fully typed.
+- **Language:** TypeScript 6 strict. All new code must be fully typed.
 - **Framework:** Next.js 16 App Router. Follow existing patterns in `src/app/`.
 - **UI:** Tailwind CSS v4 + shadcn/ui (Radix primitives). No custom CSS modules or styled-components.
 - **Charts:** `recharts` only.
 - **Forms:** `react-hook-form` with `Controller`. **One** `useForm<DealInputs>()` instance lives in `ProductionHubClient` — never create a new form instance in a section component.
 - **State:** Zustand only for UI state (guided mode). Deal data lives in Firestore via `useDealInputs`.
-- **Firebase writes:** `setDoc` with `stripUndefined()` applied before every write. No raw saves with `undefined` fields.
+- **Firebase writes:** Firestore writes go through the `mutate` callable only (`src/lib/mutations.ts`); never call `setDoc`, `updateDoc`, or `deleteDoc` from the client. Storage allows a client upload only to a path reserved through `mutate` (`reserveUpload`) and denies client updates and deletes, so remove files with `mutate`'s `deleteFile` action.
 - **Static export rules:** Never add `"use client"` to server component wrappers. Use the `*DynamicLoader` client pattern for components requiring `useSearchParams`.
 
 ## Financial Model Rules

@@ -20,7 +20,7 @@
 
 **Auth Persistence:** `browserLocalPersistence` is set on the Firebase Auth instance to prevent logout on navigation in the static export context. The `(app)` layout shows a skeleton while `loading || !user`.
 
-**Firestore `undefined` Safety:** All saves go through `stripUndefined<T>()` in `firestore.ts`, which recursively removes `undefined` fields while preserving Firestore sentinel values (detected via `_methodName` duck-typing).
+**Callable Write Path:** All saves go through the `mutate` Cloud Functions callable (`src/lib/mutations.ts`, codebase `override-mutations`), which enforces ownership, quotas, and upload reservations. Firestore rules deny all direct client writes; Storage rules allow a client upload only to a path reserved through `mutate` and deny client updates and deletes. `mutate()` JSON-serializes each request, which drops `undefined` fields, and removes `createdAt`/`updatedAt` so the backend sets timestamps.
 
 **Form State Ownership:** One `useForm<DealInputs>()` instance lives in `ProductionHubClient`. All section components and `DealBuilder` receive `control`, `watch`, `setValue`, `getValues`, `handleSubmit` as props.
 
