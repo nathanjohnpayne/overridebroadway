@@ -20,7 +20,7 @@
 
 **Auth Persistence:** `browserLocalPersistence` is set on the Firebase Auth instance to prevent logout on navigation in the static export context. The `(app)` layout shows a skeleton while `loading || !user`.
 
-**Callable Mutation Backend:** All Firestore writes and Storage deletes go through the `mutate` callable (`src/lib/mutations.ts` → `functions/src/index.cjs`, codebase `override-mutations`), which enforces ownership, quotas, deletion fencing, and upload reservations (`specs/resource-quotas.md`). Requests cross the callable boundary as JSON: `undefined` object properties are omitted and `undefined` array elements become `null`. The client also drops `createdAt`/`updatedAt` so the backend owns timestamps.
+**Callable Write Path:** All saves go through the `mutate` Cloud Functions callable (`src/lib/mutations.ts`, codebase `override-mutations`), which enforces ownership, quotas, and upload reservations. Firestore rules deny all direct client writes; Storage rules allow a client upload only to a path reserved through `mutate` and deny client updates and deletes. `mutate()` JSON-serializes each request (`undefined` object properties are omitted and `undefined` array elements become `null`) and removes `createdAt`/`updatedAt` so the backend sets timestamps.
 
 **Form State Ownership:** One `useForm<DealInputs>()` instance lives in `ProductionHubClient`. All section components and `DealBuilder` receive `control`, `watch`, `setValue`, `getValues`, `handleSubmit` as props.
 

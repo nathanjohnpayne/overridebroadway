@@ -41,7 +41,7 @@ The following tool config directory must contain only configuration:
 - **One `useForm()` instance.** The `useForm<DealInputs>()` call lives in `ProductionHubClient`. Never add a second form instance in a section component.
 - **No `"use client"` on server wrappers.** `app/(app)/productions/view/page.tsx` must remain a server component. Use the `*DynamicLoader` pattern for client-side rendering.
 - **`DealInputs.investors` is always `[]` in Firestore.** Do not read investors from the deal form — always bridge from `useInvestors()` at the model computation site.
-- **All Firestore writes and Storage deletes go through the `mutate` callable.** Clients never write Firestore or delete Storage objects directly (`firestore.rules` and `storage.rules` deny them); uploads are client creates authorized by a `mutate`-issued reservation.
+- **All Firestore writes and Storage deletes go through the `mutate` callable; uploads are client creates authorized by a `mutate`-issued reservation.** Firestore rules deny every client write; use `mutate()` and its helpers in `src/lib/mutations.ts` (or the wrappers in `src/lib/firestore.ts`), never `setDoc`/`updateDoc`/`deleteDoc` or a direct Storage delete. `mutate()` JSON-serializes each request, which drops `undefined` values, and strips `createdAt`/`updatedAt` so the backend owns timestamps.
 
 ## High-Risk Modification Zones
 
@@ -55,7 +55,6 @@ Changes to the following files require extra scrutiny and explicit human review:
 | `firestore.rules` | Firestore security — incorrect rules can expose deal data or lock out legitimate users |
 | `storage.rules` | Storage security — same caution |
 | `src/lib/firestore.ts` | All Firestore CRUD — changes affect data integrity across the app |
-| `functions/src/service.cjs` | Callable mutation backend — the only write path; enforces ownership, quotas, deletion fencing, and upload reservations |
 | `src/contexts/AuthContext.tsx` | Auth state — breaks login/logout/route guards |
 
 ## CI Enforcement
