@@ -39,7 +39,7 @@ Update Firestore security rules for dealRooms collection
 - **Charts:** `recharts` only.
 - **Forms:** `react-hook-form` with `Controller`. **One** `useForm<DealInputs>()` instance lives in `ProductionHubClient` — never create a new form instance in a section component.
 - **State:** Zustand only for UI state (guided mode). Deal data lives in Firestore via `useDealInputs`.
-- **Firebase writes:** Through the `mutate` callable only (`src/lib/mutations.ts`). Firestore and Storage rules deny direct client writes, so never call `setDoc`, `updateDoc`, `deleteDoc`, or a Storage delete from the client.
+- **Firebase writes:** Firestore writes go through the `mutate` callable only (`src/lib/mutations.ts`); never call `setDoc`, `updateDoc`, or `deleteDoc` from the client. Storage allows a client upload only to a path reserved through `mutate` (`reserveUpload`) and denies client updates and deletes, so remove files with `mutate`'s `deleteFile` action.
 - **Static export rules:** Never add `"use client"` to server component wrappers. Use the `*DynamicLoader` client pattern for components requiring `useSearchParams`.
 
 ## Financial Model Rules
