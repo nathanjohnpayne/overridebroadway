@@ -1,3 +1,11 @@
+---
+tags:
+  - overridebroadway
+  - prd
+  - finance
+  - broadway
+  - saas
+---
 <!--
 generated_by: scripts/project-doc-sync.sh
 do_not_edit: true
@@ -10,14 +18,6 @@ document_slug: overridebroadway
 sync_direction: central-to-repo
 -->
 
----
-tags:
-  - overridebroadway
-  - prd
-  - finance
-  - broadway
-  - saas
----
 
 # Override — Product Requirements Document
 
