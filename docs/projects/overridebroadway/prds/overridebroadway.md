@@ -11,7 +11,7 @@ generated_by: scripts/project-doc-sync.sh
 do_not_edit: true
 source_repo: nathanjohnpayne/docs
 source_path: projects/overridebroadway/prds/overridebroadway.md
-source_ref: de4b144
+source_ref: de4b144a2dbba54cc594559be37614ecb8c3b610
 project: overridebroadway
 document_class: prd
 document_slug: overridebroadway
