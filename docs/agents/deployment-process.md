@@ -10,7 +10,7 @@ The 1Password-first deploy-auth model is a deliberate repository invariant. Do n
   deploy credentials are already cached in `GOOGLE_APPLICATION_CREDENTIALS`. No additional
   biometric prompt is needed for deployment.
 
-If an `op` command fails with a sign-in or biometric error during deploy, follow the pause-and-prompt procedure in [operating-rules.md](operating-rules.md#1password-cli-authentication-failures). Do not retry or work around the failure without the human present.
+If an `op` command fails with a sign-in or biometric error during deploy, follow the pause-and-prompt procedure in [shared-operating-rules.md](shared-operating-rules.md#1password-cli-authentication-failures). Do not retry or work around the failure without the human present.
 
 ```bash
 # Full deploy (hosting + Firestore rules + Storage rules + override-mutations functions)

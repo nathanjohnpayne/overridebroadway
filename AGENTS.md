@@ -5,11 +5,13 @@ Agent instructions are organized into focused sub-files under `docs/agents/`. Re
 ## Sections
 
 1. **[Repository Overview](docs/agents/repository-overview.md)** --- Project description, tech stack, agent role
-2. **[Agent Operating Rules](docs/agents/operating-rules.md)** --- Reading order, conflict resolution
-3. **[Code Modification Rules](docs/agents/code-modification-rules.md)** --- File creation, duplication, directory constraints
-4. **[Documentation Rules](docs/agents/documentation-rules.md)** --- When and what to update
-5. **[Testing Requirements](docs/agents/testing-requirements.md)** --- Coverage expectations, test deletion policy
-6. **[Deployment Process](docs/agents/deployment-process.md)** --- Build/deploy flow, 1Password-backed auth
+2. **[Shared Agent Operating Rules](docs/agents/shared-operating-rules.md)** --- Rules that hold in every repository: secret handling, 1Password failures, bug fix escalation, feedback rollup and more
+3. **[Agent Operating Rules](docs/agents/operating-rules.md)** --- This repository's local overlay: reading order, conflict resolution, architecture, worktree lifecycle
+4. **[Code Modification Rules](docs/agents/code-modification-rules.md)** --- File creation, duplication, directory constraints
+5. **[Documentation Rules](docs/agents/documentation-rules.md)** --- When and what to update
+6. **[Testing Requirements](docs/agents/testing-requirements.md)** --- Coverage expectations, test deletion policy
+7. **[Deployment Process](docs/agents/deployment-process.md)** --- Build/deploy flow, 1Password-backed auth
+8. **[Code Review Requirements](docs/agents/code-review-requirements.md)** --- Pointer to REVIEW_POLICY.md and the per-repo review configuration
 
 ## Code Review Policy
 
