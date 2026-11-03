@@ -13,7 +13,7 @@ Override is the financial operating platform for Broadway producers — from mod
 - Zustand with persist middleware (guided mode UI state across page refreshes)
 - Sonner (toasts for auth, save, upload, and deal room flows)
 - Firebase 12 — Auth, Firestore, Storage, Analytics, Functions (client SDK calls the `mutate` callable)
-- Cloud Functions v2 — one callable mutation backend (`functions/`, codebase `override-mutations`, Node 22)
+- Cloud Functions v2 — one callable mutation backend (`functions/`, codebase `override-mutations`, Node 24)
 - Firebase Hosting (static export, custom domain: overridebroadway.com)
 
 **Common commands:**
