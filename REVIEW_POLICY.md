@@ -91,7 +91,7 @@ After preflight, these environment variables are set:
 - `GOOGLE_APPLICATION_CREDENTIALS` — used automatically by gcloud/Firebase scripts
 - `OP_PREFLIGHT_DONE=1` — flag indicating preflight has been run
 
-If a 1Password authentication or signing prompt fails mid-session, stop and follow the pause-and-prompt procedure in `docs/agents/operating-rules.md`. Wait for the human to confirm they are present and ready before one canonical preflight refresh; do not retry individual credential reads or refresh automatically.
+If a 1Password authentication or signing prompt fails mid-session, stop and follow the pause-and-prompt procedure in `docs/agents/shared-operating-rules.md` under "1Password CLI authentication failures". Wait for the human to confirm they are present and ready before one canonical preflight refresh; do not retry individual credential reads or refresh automatically.
 
 ### Phase 1: Authoring
 
@@ -621,7 +621,7 @@ scripts/gh-as-author.sh -- gh pr merge <PR#> --repo <owner/repo> --merge --match
 
 - Use the registered reviewer identity for the running agent; verify it against the [PAT lookup table](#pat-lookup-table).
 - `gh auth status` is not an attribution proof. The wrappers verify the effective write identity immediately before the operation.
-- In cloud sessions without 1Password, follow [Cloud Agent Environments](docs/agents/cloud-environments.md): use the provisioned author/reviewer PATs through the same identity-checked wrappers and do not invoke local credential preflight. If local 1Password authentication or a signing prompt fails, stop and follow the pause-and-prompt procedure in `docs/agents/operating-rules.md` under "1Password CLI authentication failures." Do not fall back to inline credential reads, hardcoded tokens, skipped review or automatic retries.
+- In cloud sessions without 1Password, follow [Cloud Agent Environments](docs/agents/cloud-environments.md): use the provisioned author/reviewer PATs through the same identity-checked wrappers and do not invoke local credential preflight. If local 1Password authentication or a signing prompt fails, stop and follow the pause-and-prompt procedure in `docs/agents/shared-operating-rules.md` under "1Password CLI authentication failures." Do not fall back to inline credential reads, hardcoded tokens, skipped review or automatic retries.
 - If GitHub reports `Review Can not approve your own pull request`, recheck the live author, reviewer identity and existing approval scope before retrying through the wrapper.
 
 ### PAT requirements for reviewer identities
